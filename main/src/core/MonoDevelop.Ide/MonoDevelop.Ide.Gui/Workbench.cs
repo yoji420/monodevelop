@@ -1328,6 +1328,11 @@ namespace MonoDevelop.Ide.Gui
 			return null;
 		}
 
+		internal void SetPinTabEnabled (bool enabled)
+		{
+			workbench.TabControl.SetPinTabEnabled (enabled);
+		}
+
 		internal void ReorderTab (int oldPlacement, int newPlacement)
 		{
 			workbench.ReorderTab (oldPlacement, newPlacement);
