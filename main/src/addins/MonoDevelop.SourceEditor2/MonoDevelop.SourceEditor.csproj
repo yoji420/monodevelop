@@ -301,6 +301,10 @@
     <Compile Include="MonoDevelop.SourceEditor.Braces\IBraceCompletionStack.cs" />
     <Compile Include="MonoDevelop.SourceEditor\ClipboardRingService.cs" />
     <Compile Include="Mono.TextEditor\Gui\CodePreviewWindow.cs" />
+    <Compile Include="MonoDevelop.SourceEditor\SourceEditorView.IMonoDevelopEditorOperations.cs" />
+    <Compile Include="MonoDevelop.SourceEditor.VsCompletion\CompletionUI.cs" />
+    <Compile Include="MonoDevelop.SourceEditor.VsCompletion\CompletionUIProvider.cs" />
+    <Compile Include="MonoDevelop.SourceEditor.VsCompletion\DefaultCompletionService.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="MonoDevelop.SourceEditor.addin.xml" />
