@@ -22,7 +22,7 @@
       <Private>$(ReferencesVSEditorCopyToOutput)</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Language">
-      <HintPath>$(PackagesDirectory)\Microsoft.VisualStudio.Language.15.6.289-preview-g5a23388e08\lib\net46\Microsoft.VisualStudio.Language.dll</HintPath>
+      <HintPath>$(PackagesDirectory)\Microsoft.VisualStudio.Language.$(NuGetVersionVSEditor)\lib\net46\Microsoft.VisualStudio.Language.dll</HintPath>
       <Private>$(ReferencesVSEditorCopyToOutput)</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Language.Intellisense">
