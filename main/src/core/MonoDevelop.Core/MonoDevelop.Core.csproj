@@ -5,6 +5,7 @@
   <PropertyGroup>
     <ReferencesVSEditorCopyToOutput>true</ReferencesVSEditorCopyToOutput>
     <ReferencesRoslynCopyToOutput>true</ReferencesRoslynCopyToOutput>
+    <ReferencesGtkCopyToOutput Condition="$(OS) == 'Windows_NT'">true</ReferencesGtkCopyToOutput>
   </PropertyGroup>
   <Import Project="$(ReferencesRoslyn)" />
   <Import Project="$(ReferencesVSEditor)" />

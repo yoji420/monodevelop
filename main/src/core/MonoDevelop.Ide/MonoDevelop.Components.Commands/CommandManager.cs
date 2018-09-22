@@ -43,6 +43,8 @@ using MonoDevelop.Core;
 using MonoDevelop.Ide;
 using System.Threading.Tasks;
 using System.Threading;
+using Gtk;
+using System.Runtime.CompilerServices;
 
 namespace MonoDevelop.Components.Commands
 {
@@ -704,7 +706,72 @@ namespace MonoDevelop.Components.Commands
 				win.KeyReleaseEvent += OnKeyReleased;
 				win.ButtonPressEvent += HandleButtonPressEvent;
 				win.Destroyed += TopLevelDestroyed;
+				win.FocusActivated += OnFocusActivated;
+				win.DefaultActivated += OnDefaultActivated;
+				win.EnterNotifyEvent += OnEnterNotifyEvent;
+				win.FocusChildSet += OnFocusChildSet;
+				win.Focused += OnFocused;
+				win.FocusGrabbed += OnFocusGrabbed;
+				win.FocusInEvent += OnFocusInEvent;
+				win.FocusMoved += OnFocusMoved;
+				win.FocusOutEvent += OnFocusOutEvent;
+				win.SetFocus += OnSetFocus;
 			}
+		}
+
+		private void OnSetFocus (object o, SetFocusArgs args)
+		{
+			Log ();
+		}
+
+		private void OnFocusOutEvent (object o, FocusOutEventArgs args)
+		{
+			Log ();
+		}
+
+		private void Log ([CallerMemberName] string callerMemberName = null)
+		{
+			Debug.WriteLine (callerMemberName);
+		}
+
+		private void OnFocusMoved (object o, FocusMovedArgs args)
+		{
+			Log ();
+		}
+
+		private void OnFocusInEvent (object o, FocusInEventArgs args)
+		{
+			Log ();
+		}
+
+		private void OnFocusGrabbed (object sender, EventArgs e)
+		{
+			Log ();
+		}
+
+		private void OnFocused (object o, FocusedArgs args)
+		{
+			Log ();
+		}
+
+		private void OnFocusChildSet (object o, FocusChildSetArgs args)
+		{
+			Log ();
+		}
+
+		private void OnEnterNotifyEvent (object o, EnterNotifyEventArgs args)
+		{
+			Log ();
+		}
+
+		private void OnDefaultActivated (object sender, EventArgs e)
+		{
+			Log ();
+		}
+
+		private void OnFocusActivated (object sender, EventArgs e)
+		{
+			Log ();
 		}
 
 		[GLib.ConnectBefore]

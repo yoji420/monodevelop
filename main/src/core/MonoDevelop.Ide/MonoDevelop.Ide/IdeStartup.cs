@@ -529,18 +529,9 @@ namespace MonoDevelop.Ide
 
 		static bool CheckWindowsGtk ()
 		{
-			string location = null;
-			Version version = null;
+			string location = @"C:\gtk-build-shiz\install\gtk\Win32";
 			Version minVersion = new Version (2, 12, 22);
-
-			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Xamarin\GtkSharp\InstallFolder")) {
-				if (key != null)
-					location = key.GetValue (null) as string;
-			}
-			using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey (@"SOFTWARE\Xamarin\GtkSharp\Version")) {
-				if (key != null)
-					Version.TryParse (key.GetValue (null) as string, out version);
-			}
+			Version version = new Version (2, 12, 45);
 
 			//TODO: check build version of GTK# dlls in GAC
 			if (version == null || version < minVersion || location == null || !File.Exists (Path.Combine (location, "bin", "libgtk-win32-2.0-0.dll"))) {
