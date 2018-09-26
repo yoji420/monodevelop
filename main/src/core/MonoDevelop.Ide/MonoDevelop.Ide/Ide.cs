@@ -190,7 +190,21 @@ namespace MonoDevelop.Ide
 				return Runtime.Version;
 			}
 		}
-		
+
+		// This flag tells us whether or not the solution being loaded was from the file manager.
+		static bool reportTimeToCode;
+		static bool fmTimeoutExpired;
+		public static bool ReportTimeToCode {
+			get => reportTimeToCode && !fmTimeoutExpired;
+			set {
+				reportTimeToCode = value;
+				if (fmTimeoutId > 0) {
+					GLib.Source.Remove (fmTimeoutId);
+					fmTimeoutId = 0;
+				}
+			}
+		}
+
 		public static void Initialize (ProgressMonitor monitor)
 		{
 			// Already done in IdeSetup, but called again since unit tests don't use IdeSetup.
@@ -333,7 +347,23 @@ namespace MonoDevelop.Ide
 		{
 			Ide.IdeApp.Workbench.StatusBar.ShowWarning (e.Message);
 		}
-		
+
+		static readonly uint fmTimeoutMs = 2500;
+		static uint fmTimeoutId;
+		internal static void StartFMOpenTimer (Action timeCompletion)
+		{
+			// We only track time to code if the reportTimeToCode flag is set within fmTimeoutMs from this method being called
+			fmTimeoutId = GLib.Timeout.Add (fmTimeoutMs, () => FMOpenTimerExpired (timeCompletion));
+		}
+
+		static bool FMOpenTimerExpired (Action timeCompletion)
+		{
+			fmTimeoutExpired = true;
+			fmTimeoutId = 0;
+			timeCompletion ();
+			return false;
+		}
+
 		//this method is MIT/X11, 2009, Michael Hutchinson / (c) Novell
 		public static void OpenFiles (IEnumerable<FileOpenInformation> files)
 		{
@@ -341,7 +371,7 @@ namespace MonoDevelop.Ide
 		}
 
 		//this method is MIT/X11, 2009, Michael Hutchinson / (c) Novell
-		internal static async void OpenFiles (IEnumerable<FileOpenInformation> files, IDictionary<string, string> metadata)
+		internal static async void OpenFiles (IEnumerable<FileOpenInformation> files, OpenWorkspaceItemMetadata metadata)
 		{
 			if (!files.Any ())
 				return;
@@ -409,10 +439,18 @@ namespace MonoDevelop.Ide
 		{
 			if (args.Change == ExtensionChange.Add) {
 				try {
-					if (typeof(CommandHandler).IsInstanceOfType (args.ExtensionObject))
-						typeof(CommandHandler).GetMethod ("Run", System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null).Invoke (args.ExtensionObject, null);
-					else
+#if DEBUG
+					// Only show this in debug builds for now, we want to enable this later for addins that might delay
+					// IDE startup.
+					if (args.ExtensionNode is TypeExtensionNode node) {
+						LoggingService.LogDebug ("Startup command handler: {0}", node.TypeName);
+					}
+#endif
+					if (args.ExtensionObject is CommandHandler handler) {
+						handler.InternalRun ();
+					} else {
 						LoggingService.LogError ("Type " + args.ExtensionObject.GetType () + " must be a subclass of MonoDevelop.Components.Commands.CommandHandler");
+					}
 				} catch (Exception ex) {
 					LoggingService.LogError (ex.ToString ());
 				}

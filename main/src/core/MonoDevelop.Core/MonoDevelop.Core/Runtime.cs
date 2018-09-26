@@ -108,6 +108,7 @@ namespace MonoDevelop.Core
 			AddinManager.AddinLoadError += OnLoadError;
 			AddinManager.AddinLoaded += OnLoad;
 			AddinManager.AddinUnloaded += OnUnload;
+			AddinManager.AddinAssembliesLoaded += OnAssembliesLoaded;
 
 			try {
 				Counters.RuntimeInitialization.Trace ("Initializing Addin Manager");
@@ -211,15 +212,28 @@ namespace MonoDevelop.Core
 			string msg = "Add-in error (" + args.AddinId + "): " + args.Message;
 			LoggingService.LogError (msg, args.Exception);
 		}
-		
+
 		static void OnLoad (object s, AddinEventArgs args)
 		{
-			Counters.AddinsLoaded.Inc ("Add-in loaded: " + args.AddinId, new Dictionary<string,string> { { "AddinId", args.AddinId } });
+			Counters.AddinsLoaded.Inc ("Add-in loaded: " + args.AddinId, new Dictionary<string, string> {
+				{ "AddinId", args.AddinId },
+				{ "LoadTrace", Environment.StackTrace },
+			});
+#if DEBUG
+			LoggingService.LogDebug ("Add-in loaded: {0}: {1}", args.AddinId, Environment.StackTrace);
+#endif
 		}
 		
 		static void OnUnload (object s, AddinEventArgs args)
 		{
 			Counters.AddinsLoaded.Dec ("Add-in unloaded: " + args.AddinId);
+		}
+
+		static void OnAssembliesLoaded (object s, AddinEventArgs args)
+		{
+#if DEBUG
+			LoggingService.LogDebug ("Add-in assemblies loaded: {0}: {1}", args.AddinId, Environment.StackTrace);
+#endif
 		}
 		
 		public static bool Initialized {
@@ -299,7 +313,7 @@ namespace MonoDevelop.Core
 			}
 			set {
 				if (mainSynchronizationContext != null && value != null)
-					throw new InvalidOperationException ("The main synchronization context has already been set");
+					LoggingService.LogWarning ($"The main synchronization context is being changed from {mainSynchronizationContext} to {value}");
 
 				mainThread = Thread.CurrentThread;
 				mainSynchronizationContext = value;
@@ -552,7 +566,7 @@ namespace MonoDevelop.Core
 		public static Counter DirectoriesRemoved = InstrumentationService.CreateCounter ("Directories removed", "File Service");
 		public static Counter DirectoriesCreated = InstrumentationService.CreateCounter ("Directories created", "File Service");
 		public static Counter DirectoriesRenamed = InstrumentationService.CreateCounter ("Directories renamed", "File Service");
-		
+
 		public static Counter LogErrors = InstrumentationService.CreateCounter ("Errors", "Log");
 		public static Counter LogWarnings = InstrumentationService.CreateCounter ("Warnings", "Log");
 		public static Counter LogMessages = InstrumentationService.CreateCounter ("Information messages", "Log");
@@ -572,7 +586,7 @@ namespace MonoDevelop.Core
 		[Obsolete]
 		public readonly ConfigurationProperty<bool> BuildWithMSBuild = ConfigurationProperty.CreateObsolete (true);
 
-		public readonly ConfigurationProperty<bool> SkipBuildingUnmodifiedProjects = ConfigurationProperty.Create ("MonoDevelop.Ide.SkipBuildingUnmodifiedProjects", false);
+		public readonly ConfigurationProperty<bool> SkipBuildingUnmodifiedProjects = ConfigurationProperty.Create ("MonoDevelop.Ide.SkipBuildingUnmodifiedProjects", true);
 		public readonly ConfigurationProperty<bool> ParallelBuild = ConfigurationProperty.Create ("MonoDevelop.ParallelBuild", true);
 
 		public readonly ConfigurationProperty<string> AuthorName = ConfigurationProperty.Create ("Author.Name", Environment.UserName, oldName:"ChangeLogAddIn.Name");

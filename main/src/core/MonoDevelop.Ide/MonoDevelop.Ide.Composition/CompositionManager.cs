@@ -89,18 +89,22 @@ namespace MonoDevelop.Ide.Composition
 		/// <summary>
 		/// Returns an instance of type T that is exported by some composition part. The instance is shared (singleton).
 		/// </summary>
-		public static T GetExportedValue<T> ()
-		{
-			return Instance.ExportProvider.GetExportedValue<T> ();
-		}
+		public static T GetExportedValue<T> () => Instance.ExportProvider.GetExportedValue<T> ();
 
 		/// <summary>
-		/// Returns all instance of type T that are exported by some composition part. The instances are shared (singletons).
+		/// Returns all instances of type T that are exported by some composition part. The instances are shared (singletons).
 		/// </summary>
-		public static IEnumerable<T> GetExportedValues<T> ()
-		{
-			return Instance.ExportProvider.GetExportedValues<T> ();
-		}
+		public static IEnumerable<T> GetExportedValues<T> () => Instance.ExportProvider.GetExportedValues<T> ();
+
+		/// <summary>
+		/// Returns a lazy holding the instance of type T that is exported by some composition part. The instance is shared (singleton).
+		/// </summary>
+		public static Lazy<T> GetExport<T> () => new Lazy<T> (() => Instance.ExportProvider.GetExportedValue<T> ());
+
+		/// <summary>
+		/// Returns a lazy holding all instances of type T that are exported by some composition part. The instances are shared (singletons).
+		/// </summary>
+		public static Lazy<IEnumerable<T>> GetExports<T> () => new Lazy<IEnumerable<T>> (() => Instance.ExportProvider.GetExportedValues<T> ());
 
 		public RuntimeComposition RuntimeComposition { get; private set; }
 		public IExportProviderFactory ExportProviderFactory { get; private set; }

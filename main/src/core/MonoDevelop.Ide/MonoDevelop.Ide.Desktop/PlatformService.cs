@@ -175,7 +175,7 @@ namespace MonoDevelop.Ide.Desktop
 
 		public string GetMimeTypeForRoslynLanguage (string language)
 		{
-			foreach (MimeTypeNode mt in mimeTypeNodes) {
+			foreach (MimeTypeNode mt in MimeTypeNodes.All) {
 				if (mt.RoslynName == language)
 					return mt.Id;
 			}
@@ -276,33 +276,39 @@ namespace MonoDevelop.Ide.Desktop
 				return null;
 		}
 
-		static List<MimeTypeNode> mimeTypeNodes = new List<MimeTypeNode> ();
-		static PlatformService ()
+		static class MimeTypeNodes
 		{
-			if (AddinManager.IsInitialized) {
-				AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/MimeTypes", delegate (object sender, ExtensionNodeEventArgs args) {
-					var newList = new List<MimeTypeNode> (mimeTypeNodes);
-					var mimeTypeNode = (MimeTypeNode)args.ExtensionNode;
-					switch (args.Change) {
-					case ExtensionChange.Add:
-						// initialize child nodes.
-						mimeTypeNode.ChildNodes.GetEnumerator ();
-						newList.Add (mimeTypeNode);
-						break;
-					case ExtensionChange.Remove:
-						newList.Remove (mimeTypeNode);
-						break;
-					}
-					mimeTypeNodes = newList;
-				});
+			public static List<MimeTypeNode> All => mimeTypeNodes;
+
+			static List<MimeTypeNode> mimeTypeNodes = new List<MimeTypeNode> ();
+
+			static MimeTypeNodes ()
+			{
+				if (AddinManager.IsInitialized) {
+					AddinManager.AddExtensionNodeHandler ("/MonoDevelop/Core/MimeTypes", delegate (object sender, ExtensionNodeEventArgs args) {
+						var newList = new List<MimeTypeNode> (mimeTypeNodes);
+						var mimeTypeNode = (MimeTypeNode)args.ExtensionNode;
+						switch (args.Change) {
+						case ExtensionChange.Add:
+							// initialize child nodes.
+							mimeTypeNode.ChildNodes.GetEnumerator ();
+							newList.Add (mimeTypeNode);
+							break;
+						case ExtensionChange.Remove:
+							newList.Remove (mimeTypeNode);
+							break;
+						}
+						mimeTypeNodes = newList;
+					});
+				}
 			}
 		}
 
-		static Lazy<IFilePathRegistryService> filePathRegistryService = new Lazy<IFilePathRegistryService> (() => CompositionManager.GetExportedValue<IFilePathRegistryService> ());
+		static Lazy<IFileToContentTypeService> fileToContentTypeService = CompositionManager.GetExport<IFileToContentTypeService> ();
 		MimeTypeNode FindMimeTypeForFile (string fileName)
 		{
 			try {
-				IContentType contentType = filePathRegistryService.Value.GetContentTypeForPath (fileName);
+				IContentType contentType = fileToContentTypeService.Value.GetContentTypeForFilePath (fileName);
 				if (contentType != PlatformCatalog.Instance.ContentTypeRegistryService.UnknownContentType) {
 					string mimeType = PlatformCatalog.Instance.MimeToContentTypeRegistryService.GetMimeType (contentType);
 					if (mimeType != null) {
@@ -313,10 +319,10 @@ namespace MonoDevelop.Ide.Desktop
 					}
 				}
 			} catch (Exception ex) {
-				LoggingService.LogError ("IFilePathRegistryService query failed", ex);
+				LoggingService.LogError ("IFilePathToContentTypeProvider query failed", ex);
 			}
 
-			foreach (MimeTypeNode mt in mimeTypeNodes) {
+			foreach (MimeTypeNode mt in MimeTypeNodes.All) {
 				if (mt.SupportsFile (fileName))
 					return mt;
 			}
@@ -325,7 +331,7 @@ namespace MonoDevelop.Ide.Desktop
 
 		MimeTypeNode FindMimeType (string type)
 		{
-			foreach (MimeTypeNode mt in mimeTypeNodes) {
+			foreach (MimeTypeNode mt in MimeTypeNodes.All) {
 				if (mt.Id == type)
 					return mt;
 			}

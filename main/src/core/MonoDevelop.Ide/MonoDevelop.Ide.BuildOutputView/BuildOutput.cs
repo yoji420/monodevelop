@@ -27,17 +27,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 using MonoDevelop.Core;
 using MonoDevelop.Projects;
-using MonoDevelop.Ide.Editor;
 using Microsoft.Build.Logging;
 using Microsoft.Build.Framework;
-using Gtk;
 using Xwt;
 using System.Linq;
 using System.Collections.Immutable;
+using MonoDevelop.Projects.MSBuild;
+using System.Threading;
 
 namespace MonoDevelop.Ide.BuildOutputView
 {
@@ -46,6 +45,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 		BuildOutputProgressMonitor progressMonitor;
 		ImmutableList<BuildOutputProcessor> projects = ImmutableList<BuildOutputProcessor>.Empty;
 		public event EventHandler OutputChanged;
+		public event EventHandler ProjectStarted;
+		public event EventHandler ProjectFinished;
 
 		public ProgressMonitor GetProgressMonitor ()
 		{
@@ -131,6 +132,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 			OutputChanged?.Invoke (this, EventArgs.Empty);
 		}
 
+		internal void RaiseProjectStarted ()
+		{
+			ProjectStarted?.Invoke (this, EventArgs.Empty);
+		}
+
+		internal void RaiseProjectFinished ()
+		{
+			ProjectFinished?.Invoke (this, EventArgs.Empty);
+		}
+
 		public List<BuildOutputNode> GetRootNodes (bool includeDiagnostics)
 		{
 			if (includeDiagnostics) {
@@ -151,6 +162,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 		{
 			int errorCount = 0, warningCount = 0;
 			Dictionary<string, AggregatedBuildOutputNode> result = new Dictionary<string, AggregatedBuildOutputNode> ();
+			DateTime maximum = default (DateTime);
+			DateTime minimum = default (DateTime);
 			foreach (var proj in projects) {
 				foreach (var node in proj.RootNodes) {
 					AggregatedBuildOutputNode aggregated = null;
@@ -158,6 +171,14 @@ namespace MonoDevelop.Ide.BuildOutputView
 						aggregated.AddNode (node);
 					} else {
 						result [node.Message] = new AggregatedBuildOutputNode (node);
+					}
+
+					if (maximum == default (DateTime) || node.EndTime.Ticks > maximum.Ticks) {
+						maximum = node.EndTime;
+					}
+
+					if (minimum == default (DateTime) || node.StartTime.Ticks < minimum.Ticks) {
+						minimum = node.StartTime;
 					}
 
 					errorCount += node.Children.Sum (x => x.ErrorCount);
@@ -170,6 +191,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 				var message = errorCount > 0 ? GettextCatalog.GetString ("Build failed") : GettextCatalog.GetString ("Build succeeded");
 				var summaryNode = new BuildOutputNode {
 					NodeType = BuildOutputNodeType.BuildSummary,
+					StartTime = minimum,
+					EndTime = maximum,
 					Message = message,
 					FullMessage = message,
 					HasErrors = errorCount > 0,
@@ -185,11 +208,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 			return result.Values;
 		}
 
-		public void ProcessProjects () 
+		public void ProcessProjects (bool showDiagnostics, BuildOutputCounterMetadata metadata) 
 		{
 			foreach (var p in projects) {
 				p.Process ();
 			}
+
+			metadata.Verbosity = showDiagnostics ? MSBuildVerbosity.Diagnostic : MSBuildVerbosity.Normal;
+			metadata.BuildCount = projects.Count;
+			metadata.OnDiskSize = projects.Sum (x => new FileInfo (x.FileName).Length);
+			metadata.RootNodesCount = projects.Sum (x => x.RootNodes.Count);
 		}
 
 		bool disposed = false;
@@ -244,6 +272,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 					                              GettextCatalog.GetString ("Custom project started building"),
 					                              true, pspe.TimeStamp);
 				}
+
+				BuildOutput.RaiseProjectStarted ();
 				break;
 			case BuildSessionFinishedEvent psfe:
 				if (currentCustomProject != null) {
@@ -254,6 +284,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 					BuildOutput.Load (logFile, true);
 					binlogSessions.Remove (psfe.SessionId);
 				}
+
+				BuildOutput.RaiseProjectFinished ();
 				BuildOutput.RaiseOutputChanged ();
 				break;
 			}
@@ -350,6 +382,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 	class BuildOutputDataSearch
 	{
 		readonly IReadOnlyList<BuildOutputNode> rootNodes;
+		CancellationTokenSource cancellation;
 
 		public BuildOutputDataSearch (IReadOnlyList<BuildOutputNode> rootNodes)
 		{
@@ -389,19 +422,24 @@ namespace MonoDevelop.Ide.BuildOutputView
 		public Task<BuildOutputNode> FirstMatch (string pattern)
 		{
 			// Initialize search data
+			cancellation?.Cancel ();
 			currentSearchMatches.Clear ();
 
 			currentSearchPattern = pattern;
 			currentMatchIndex = -1;
 
+			cancellation = new CancellationTokenSource ();
+			var token = cancellation.Token;
 			return Task.Run (() => {
 				if (!string.IsNullOrEmpty (pattern)) {
 					// Perform search
 					foreach (var root in rootNodes) {
-						root.Search (currentSearchMatches, currentSearchPattern);
+						if (token.IsCancellationRequested)
+							break;
+						root.Search (currentSearchMatches, currentSearchPattern, token);
 					}
 
-					if (currentSearchMatches.Count > 0) {
+					if (currentSearchMatches.Count > 0 && !token.IsCancellationRequested) {
 						currentMatchIndex = 0;
 						return currentSearchMatches [0];
 					}
@@ -446,6 +484,10 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 			return currentSearchMatches [currentMatchIndex];
 		}
+
+		public bool IsCanceled => cancellation?.IsCancellationRequested ?? false;
+
+		public void Cancel () => cancellation?.Cancel ();
 
 		#endregion
 	}

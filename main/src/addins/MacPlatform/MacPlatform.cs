@@ -467,18 +467,20 @@ namespace MonoDevelop.MacIntegration
 				}));
 
 
-			Styles.Changed += (s, a) => {
-				var colorPanel = NSColorPanel.SharedColorPanel;
-				if (colorPanel.ContentView?.Superview?.Window == null)
-					LoggingService.LogWarning ("Updating shared color panel appearance failed, no valid window.");
-				IdeTheme.ApplyTheme (colorPanel.ContentView.Superview.Window);
-				var appearance = colorPanel.ContentView.Superview.Window.Appearance;
-				if (appearance == null)
-					appearance = NSAppearance.GetAppearance (IdeApp.Preferences.UserInterfaceTheme == Theme.Light ? NSAppearance.NameAqua : NSAppearance.NameVibrantDark);
-				// The subviews of the shared NSColorPanel do not inherit the appearance of the main panel window
-				// and need to be updated recursively.
-				UpdateColorPanelSubviewsAppearance (colorPanel.ContentView.Superview, appearance);
-			};
+			if (MacSystemInformation.OsVersion < MacSystemInformation.Mojave) { // the shared color panel has full automatic theme support on Mojave
+				Styles.Changed += (s, a) => {
+					var colorPanel = NSColorPanel.SharedColorPanel;
+					if (colorPanel.ContentView?.Superview?.Window == null)
+						LoggingService.LogWarning ("Updating shared color panel appearance failed, no valid window.");
+					IdeTheme.ApplyTheme (colorPanel.ContentView.Superview.Window);
+					var appearance = colorPanel.ContentView.Superview.Window.Appearance;
+					if (appearance == null)
+						appearance = IdeTheme.GetAppearance ();
+					// The subviews of the shared NSColorPanel do not inherit the appearance of the main panel window
+					// and need to be updated recursively.
+					UpdateColorPanelSubviewsAppearance (colorPanel.ContentView.Superview, appearance);
+				};
+			}
 
 			// FIXME: Immediate theme switching disabled, until NSAppearance issues are fixed
 			//IdeApp.Preferences.UserInterfaceTheme.Changed += (s,a) => PatchGtkTheme ();
@@ -598,6 +600,7 @@ namespace MonoDevelop.MacIntegration
 				ApplicationEvents.OpenDocuments += delegate (object sender, ApplicationDocumentEventArgs e) {
 					//OpenFiles may pump the mainloop, but can't do that from an AppleEvent, so use a brief timeout
 					GLib.Timeout.Add (10, delegate {
+						IdeApp.ReportTimeToCode = true;
 						IdeApp.OpenFiles (e.Documents.Select (
 							doc => new FileOpenInformation (doc.Key, null, doc.Value, 1, OpenDocumentOptions.DefaultInternal))
 						);
@@ -608,6 +611,7 @@ namespace MonoDevelop.MacIntegration
 
 				ApplicationEvents.OpenUrls += delegate (object sender, ApplicationUrlEventArgs e) {
 					GLib.Timeout.Add (10, delegate {
+						IdeApp.ReportTimeToCode = true;
 						// Open files via the monodevelop:// URI scheme, compatible with the
 						// common TextMate scheme: http://blog.macromates.com/2007/the-textmate-url-scheme/
 						IdeApp.OpenFiles (e.Urls.Select (url => {

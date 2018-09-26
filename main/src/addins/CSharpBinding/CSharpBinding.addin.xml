@@ -84,6 +84,7 @@
 
 	<Extension path = "/MonoDevelop/ProjectModel/MSBuildItemTypes">
 		<DotNetProjectType
+			id="MonoDevelop.CSharp.Project.CSharpProject"
 			language="C#"
 			extension="csproj"
 			guid="{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"
@@ -343,19 +344,20 @@
 		<Class class="MonoDevelop.CSharp.UnitTests.CSharpNUnitSourceCodeLocationFinder" />
 	</Extension>
 
-	<Extension path = "/MonoDevelop/Ide/AutoInsertBracketHandler">
-		<Handler class="MonoDevelop.CSharp.Features.AutoInsertBracket.CSharpAutoInsertBracketHandler" mimeTypes = "text/x-csharp" />
-	</Extension>
-
 	<Extension path="/MonoDevelop/Ide/TypeService/MefHostServices">
 		<Assembly file="MonoDevelop.CSharpBinding.dll"/>
 	</Extension>
 
-	<Extension path="/MonoDevelop/Ide/TypeService/PlatformMefHostServices">
-		<Assembly file="MonoDevelop.CSharpBinding.dll"/>
-	</Extension>
-	
 	<Extension path="/MonoDevelop/Ide/TypeService/OptionProviders">
 		<Class class="MonoDevelop.CSharp.OptionProvider.EditorConfigDocumentOptionsProviderFactory"/>
 	</Extension>
+
+	<Extension path = "/MonoDevelop/Ide/GlobalOptionsDialog/TextEditor/Behavior">
+		<Section id="CSharpOnTheFlyFormattingPanel" insertbefore="Formatting" _label="C#" fill="true" class="MonoDevelop.SourceEditor.OptionPanels.OnTheFlyFormattingPanel" icon="md-prefs-code-formatting" />
+  </Extension>
+
+	<Extension path = "/MonoDevelop/Ide/GlobalOptionsDialog/TextEditor/Analysis/C#">
+		<Panel id="CodeStylePanel" _label="Code Style" fill="true" class="MonoDevelop.CSharp.OptionProvider.CodeStylePage" grouping="Tab" icon="md-prefs-code-rules" insertbefore="CodeActions" />
+	</Extension>
+
 </ExtensionModel>

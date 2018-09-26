@@ -656,7 +656,7 @@ namespace MonoDevelop.Projects.MSBuild
 		internal static string GetLanguageGuid (string language)
 		{
 			foreach (var node in GetItemTypeNodes ().OfType<DotNetProjectTypeNode> ()) {
-				if (node.Language == language)
+				if (node.Language == language && node.IsDefaultGuid)
 					return node.Guid;
 			}
 			throw new InvalidOperationException ("Language not supported: " + language);
@@ -760,7 +760,7 @@ namespace MonoDevelop.Projects.MSBuild
 			
 			foreach (var node in GetItemTypeNodes ().OfType<ProjectTypeNode> ()) {
 				if (node.Guid.Equals (project.TypeGuid, StringComparison.OrdinalIgnoreCase)) {
-					if (node.MSBuildSupport != MSBuildSupport.Supported)
+					if (node.MSBuildSupport == MSBuildSupport.NotSupported)
 						return false;
 					return GetMSBuildSupportForFlavors (project.FlavorGuids);
 				}

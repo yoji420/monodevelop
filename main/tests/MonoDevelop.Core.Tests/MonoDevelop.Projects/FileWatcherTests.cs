@@ -462,49 +462,6 @@ namespace MonoDevelop.Projects
 		}
 
 		[Test]
-		public void NormalizeDirectories1 ()
-		{
-			FilePath fileName = Util.GetSampleProject ("FileWatcherTest", "Root.sln");
-			FilePath rootDirectory = fileName.ParentDirectory;
-
-			var directories = new [] {
-				rootDirectory.Combine ("a"),
-				rootDirectory,
-				rootDirectory.Combine ("c")
-			};
-
-			var normalized = FileWatcherService.Normalize (directories).ToArray ();
-
-			Assert.AreEqual (1, normalized.Length);
-			Assert.That (normalized, Contains.Item (rootDirectory));
-		}
-
-		[Test]
-		public void NormalizeDirectories2 ()
-		{
-			FilePath fileName = Util.GetSampleProject ("FileWatcherTest", "Root.sln");
-			FilePath rootDirectory = fileName.ParentDirectory;
-
-			var bDirectory = rootDirectory.Combine ("..", "b").FullPath;
-			var dDirectory = rootDirectory.Combine ("..", "d").FullPath;
-
-			var directories = new [] {
-				rootDirectory.Combine ("a"),
-				bDirectory,
-				rootDirectory,
-				rootDirectory.Combine ("c"),
-				dDirectory
-			};
-
-			var normalized = FileWatcherService.Normalize (directories).ToArray ();
-
-			Assert.AreEqual (3, normalized.Length);
-			Assert.That (normalized, Contains.Item (rootDirectory));
-			Assert.That (normalized, Contains.Item (bDirectory));
-			Assert.That (normalized, Contains.Item (dDirectory));
-		}
-
-		[Test]
 		public async Task DeleteProjectFileExternally_TwoSolutionsOpen_OneSolutionDisposed ()
 		{
 			FilePath rootSolFile = Util.GetSampleProject ("FileWatcherTest", "Root.sln");
@@ -827,6 +784,32 @@ namespace MonoDevelop.Projects
 			await WaitForFileRemoved (file.FilePath);
 
 			AssertFileRemoved (file.FilePath);
+		}
+
+		[Test]
+		public async Task SaveProjectFileExternally_ProjectInSolutionFolder ()
+		{
+			string solFile = Util.GetSampleProject ("ProjectInSolutionFolder", "ProjectInSolutionFolder.sln");
+			sol = (Solution)await Services.ProjectService.ReadWorkspaceItem (Util.GetMonitor (), solFile);
+			var p = (DotNetProject)sol.Items [0];
+			p.DefaultNamespace = "Test";
+			ClearFileEventsCaptured ();
+			// Ensure FileService.FileChanged event is handled after the project handles it.
+			ResetFileServiceChangedEventHandler ();
+			await FileWatcherService.Add (sol);
+			SolutionFolderItem reloadRequiredEventFiredProject = null;
+			sol.ItemReloadRequired += (sender, e) => {
+				reloadRequiredEventFiredProject = e.SolutionItem;
+			};
+
+			string xml = p.MSBuildProject.SaveToString ();
+			File.WriteAllText (p.FileName, xml);
+
+			await WaitForFileChanged (p.FileName);
+
+			AssertFileChanged (p.FileName);
+			Assert.IsTrue (p.NeedsReload);
+			Assert.AreEqual (p, reloadRequiredEventFiredProject);
 		}
 	}
 }

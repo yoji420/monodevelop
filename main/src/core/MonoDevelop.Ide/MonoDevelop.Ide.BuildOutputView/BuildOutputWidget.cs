@@ -26,7 +26,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using Xwt;
@@ -105,18 +105,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 			BuildOutput = output;
 
 			BuildOutput.OutputChanged += OnOutputChanged;
+			BuildOutput.ProjectStarted += OnProjectStarted;
+			BuildOutput.ProjectFinished += OnProjectFinished;
 			ProcessLogs (false);
 
 			pathBar = new PathBar (this.CreatePathWidget, PathBarTopPadding) {
 				DrawBottomBorder = false
 			};
-			var entries = new PathEntry [] {
-				new PathEntry (GettextCatalog.GetString ("No selection"))
-			};
-			UpdatePathBarEntries (entries);
 			pathBar.Show ();
 
-			box.PackStart (pathBar, true, true, 10);
+			box.PackStart (pathBar, true, true, 2);
 			box.ReorderChild (pathBar, 0);
 			box.Show ();
 		}
@@ -124,6 +122,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 		void OnOutputChanged (object sender, EventArgs args)
 		{
 			ProcessLogs (showDiagnosticsButton.Active);
+		}
+
+		void OnProjectStarted (object sender, EventArgs args)
+		{
+			SetSpinnerVisibility (true);
+		}
+
+		void OnProjectFinished (object sender, EventArgs args)
+		{
+			SetSpinnerVisibility (false);
 		}
 
 		void Initialize (DocumentToolbar toolbar)
@@ -134,12 +142,14 @@ namespace MonoDevelop.Ide.BuildOutputView
 			// Toolbar items must use Gtk, for now
 			Xwt.Toolkit.Load (ToolkitType.Gtk).Invoke (() => {
 				showDiagnosticsButton = new CheckBox (GettextCatalog.GetString ("Diagnostic log verbosity"));
+				showDiagnosticsButton.HeightRequest = 17;
 				showDiagnosticsButton.Accessible.Identifier = "BuildOutputWidget.ShowDiagnosticsButton";
 				showDiagnosticsButton.TooltipText = GettextCatalog.GetString ("Show full (diagnostics enabled) or reduced log");
 				showDiagnosticsButton.Accessible.Description = GettextCatalog.GetString ("Diagnostic log verbosity");
 				showDiagnosticsButton.Clicked += (sender, e) => ProcessLogs (showDiagnosticsButton.Active);
 
 				saveButton = new Button (GettextCatalog.GetString ("Save"));
+				saveButton.HeightRequest = 17;
 				saveButton.Accessible.Identifier = "BuildOutputWidget.SaveButton";
 				saveButton.TooltipText = GettextCatalog.GetString ("Save build output");
 				saveButton.Accessible.Description = GettextCatalog.GetString ("Save build output");
@@ -151,10 +161,12 @@ namespace MonoDevelop.Ide.BuildOutputView
 				searchEntry.Accessible.Name = "BuildOutputWidget.Search";
 				searchEntry.Accessible.Description = GettextCatalog.GetString ("Search the build log");
 				searchEntry.WidthRequest = 200;
+				searchEntry.Entry.HeightRequest = 17;
 				searchEntry.Visible = true;
 				searchEntry.EmptyMessage = GettextCatalog.GetString ("Search Build Output");
 
 				resultInformLabel = new Label ();
+				resultInformLabel.HeightRequest = 17;
 				searchEntry.AddLabelWidget ((Gtk.Label)resultInformLabel.ToGtkWidget ());
 
 				searchEntry.Entry.Changed += FindFirst;
@@ -166,9 +178,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 				buttonSearchForward.Clicked += FindNext;
 				buttonSearchForward.TooltipText = GettextCatalog.GetString ("Find next {0}", GetShortcut (SearchCommands.FindNext, true));
 				buttonSearchBackward.TooltipText = GettextCatalog.GetString ("Find previous {0}", GetShortcut (SearchCommands.FindPrevious, true));
-				buttonSearchBackward.Image = ImageService.GetIcon ("gtk-go-up", Gtk.IconSize.Menu);
-				buttonSearchForward.Image = ImageService.GetIcon ("gtk-go-down", Gtk.IconSize.Menu);
-				buttonSearchBackward.Sensitive = buttonSearchForward.Sensitive = false;
+				buttonSearchForward.HeightRequest = buttonSearchBackward.HeightRequest = 17;
+				SetSearchButtonsSensitivity (false);
 			});
 
 			box = new Gtk.VBox ();
@@ -232,12 +243,39 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		static void ExpandErrorOrWarningsNodes (TreeView treeView, BuildOutputDataSource dataSource, bool warnings)
 		{
+			BuildOutputNode firstNodeFound = null;
+
 			int rootsCount = dataSource.GetChildrenCount (null);
 			for (int i = 0; i < rootsCount; i++) {
 				var root = dataSource.GetChild (null, i) as BuildOutputNode;
 				treeView.ExpandRow (root, false);
-				ExpandChildrenWithErrorsOrWarnings (treeView, dataSource, root, warnings);
+				firstNodeFound = ExpandChildrenWithErrorsOrWarnings (treeView, dataSource, root, warnings, firstNodeFound);
 			}
+
+			if (firstNodeFound != null) {
+				treeView.ScrollToRow (firstNodeFound);
+				treeView.SelectRow (firstNodeFound);
+			}
+		}
+
+		static BuildOutputNode ExpandChildrenWithErrorsOrWarnings (TreeView tree, BuildOutputDataSource dataSource, BuildOutputNode parent, bool expandWarnings, BuildOutputNode firstNode)
+		{
+			int totalChildren = dataSource.GetChildrenCount (parent);
+			for (int i = 0; i < totalChildren; i++) {
+				var child = dataSource.GetChild (parent, i) as BuildOutputNode;
+				var containNodes = expandWarnings ? (child?.HasWarnings ?? false) : (child?.HasErrors ?? false);
+				if (containNodes) {
+					tree.ExpandToRow (child);
+					if (child.NodeType == (expandWarnings ? BuildOutputNodeType.Warning : BuildOutputNodeType.Error) && firstNode == null) {
+						firstNode = child;
+					}
+					firstNode = ExpandChildrenWithErrorsOrWarnings (tree, dataSource, child, expandWarnings, firstNode);
+				} else if (child.NodeType == BuildOutputNodeType.Project) {
+					tree.ExpandToRow (child);
+				}
+			}
+
+			return firstNode;
 		}
 
 		internal Task GoToError (string description, string project)
@@ -289,6 +327,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 					outputFile = outputFile.ChangeExtension (binLogExtension);
 
 				await BuildOutput.Save (outputFile);
+				ViewContentName = outputFile.FileName;
 				FileNameChanged?.Invoke (this, outputFile);
 				filePathLocation = outputFile;
 				IsDirty = false;
@@ -338,20 +377,26 @@ namespace MonoDevelop.Ide.BuildOutputView
 				return;
 			}
 
-			if (e.Button == PointerButton.Left && e.MultiplePress == 2) {
+			if (e.Button == PointerButton.Left) {
 				if (!cellView.IsViewClickable (selectedNode, e.Position)) {
 					return;
 				}
-				if (selectedNode.NodeType == BuildOutputNodeType.Warning || selectedNode.NodeType == BuildOutputNodeType.Error) {
-					GoToTask (selectedNode);
+
+				if (e.MultiplePress == 1) {
+					cellView.ClearSelection ();
+				} else if (e.MultiplePress == 2) {
+
+					if (selectedNode.NodeType == BuildOutputNodeType.Warning || selectedNode.NodeType == BuildOutputNodeType.Error) {
+						GoToTask (selectedNode);
+						return;
+					}
+					if (treeView.IsRowExpanded (selectedNode)) {
+						treeView.CollapseRow (selectedNode);
+					} else {
+						treeView.ExpandRow (selectedNode, false);
+					}
 					return;
 				}
-				if (treeView.IsRowExpanded (selectedNode)) {
-					treeView.CollapseRow (selectedNode);
-				} else {
-					treeView.ExpandRow (selectedNode, false);
-				}
-				return;
 			}
 
 			if (e.IsContextMenuTrigger) {
@@ -454,16 +499,13 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		public void ClipboardCopy ()
 		{
-			var selection = cellView.GetCurrentSelection ();
-			if (selection.Node != null && selection.SelectionStart != selection.SelectionEnd) {
-				var init = Math.Min (selection.SelectionStart, selection.SelectionEnd);
-				var end = Math.Max (selection.SelectionStart, selection.SelectionEnd);
-				Clipboard.SetText (selection.Node.Message.Substring (init, end - init));
+			var currentRow = treeView.SelectedRow as BuildOutputNode;
+
+			var cellSelection = cellView.TextSelection;
+			if (cellSelection?.IsShown (currentRow) ?? false) {
+				Clipboard.SetText (cellSelection.Content.Message.Substring (cellSelection.Index, cellSelection.Length));
 			} else {
-				var selectedNode = treeView.SelectedRow as BuildOutputNode;
-				if (selectedNode != null) {
-					ClipboardCopy (selectedNode);
-				}
+				ClipboardCopy (currentRow);
 			}
 		}
 
@@ -476,6 +518,12 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		static void RefreshSearchMatches (BuildOutputDataSource dataSource, BuildOutputDataSearch search)
 		{
+			if (search.IsCanceled) {
+				// If search was canceled, we never highlighted matches for it,
+				// so avoid doing anything
+				return;
+			}
+
 			foreach (var match in search.AllMatches) {
 				dataSource.RaiseNodeChanged (match);
 			}
@@ -483,20 +531,24 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		async void FindFirst (object sender, EventArgs args)
 		{
-			var dataSource = treeView.DataSource as BuildOutputDataSource;
-			if (dataSource == null)
+			if (!(treeView.DataSource is BuildOutputDataSource dataSource))
 				return;
 
-			// Cleanup previous search
-			if (currentSearch != null) {
-				RefreshSearchMatches (dataSource, currentSearch);
+			using (Counters.SearchBuildLog.BeginTiming ()) {
+				// Cleanup previous search
+				if (currentSearch != null) {
+					currentSearch.Cancel ();
+					RefreshSearchMatches (dataSource, currentSearch);
+					Counters.SearchBuildLog.Trace ("Cleared previous search matches");
+				}
+
+				currentSearch = new BuildOutputDataSearch (dataSource.RootNodes);
+				var firstMatch = await currentSearch.FirstMatch (searchEntry.Entry.Text);
+				if (firstMatch != null && !currentSearch.IsCanceled) {
+					RefreshSearchMatches (dataSource, currentSearch);
+					Find (firstMatch);
+				}
 			}
-
-			currentSearch = new BuildOutputDataSearch (dataSource.RootNodes);
-			var firstMatch = await currentSearch.FirstMatch (searchEntry.Entry.Text);
-			RefreshSearchMatches (dataSource, currentSearch);
-
-			Find (firstMatch);
 		}
 
 		public void FindNext (object sender, EventArgs args)
@@ -551,7 +603,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 			}
 			resultInformLabel.Show ();
 
-			buttonSearchForward.Sensitive = buttonSearchBackward.Sensitive = currentSearch?.MatchesCount > 0; 
+			SetSearchButtonsSensitivity (currentSearch?.MatchesCount > 0);
 		}
 
 		static string GetShortcut (object commandId, bool includeParen)
@@ -563,17 +615,11 @@ namespace MonoDevelop.Ide.BuildOutputView
 			return includeParen ? "(" + nextShortcut + ")" : nextShortcut;
 		}
 
-		static void ExpandChildrenWithErrorsOrWarnings (TreeView tree, BuildOutputDataSource dataSource, BuildOutputNode parent, bool expandWarnings)
+		void SetSearchButtonsSensitivity (bool sensitive)
 		{
-			int totalChildren = dataSource.GetChildrenCount (parent);
-			for (int i = 0; i < totalChildren; i++) {
-				var child = dataSource.GetChild (parent, i) as BuildOutputNode;
-				var containNodes = expandWarnings ? (child?.HasWarnings ?? false) : (child?.HasErrors ?? false);
-				if (containNodes) {
-					tree.ExpandToRow (child);
-					ExpandChildrenWithErrorsOrWarnings (tree, dataSource, child, expandWarnings);
-				}
-			}
+			buttonSearchForward.Sensitive = buttonSearchBackward.Sensitive = sensitive;
+			buttonSearchForward.Image = ImageService.GetIcon ("gtk-go-down", Gtk.IconSize.Menu).WithStyles (sensitive ? "" : "disabled");
+			buttonSearchBackward.Image = ImageService.GetIcon ("gtk-go-up", Gtk.IconSize.Menu).WithStyles (sensitive ? "" : "disabled");
 		}
 
 		Task SetSpinnerVisibility (bool visible)
@@ -600,27 +646,31 @@ namespace MonoDevelop.Ide.BuildOutputView
 				await SetSpinnerVisibility (true);
 
 				try {
-					BuildOutput.ProcessProjects ();
+					var metadata = new BuildOutputCounterMetadata ();
+					using (Counters.ProcessBuildLog.BeginTiming (metadata)) {
+						BuildOutput.ProcessProjects (showDiagnostics, metadata);
 
-					await InvokeAsync (() => {
-						currentSearch = null;
-						searchEntry.Entry.Text = String.Empty;
-						Find (null);
+						await InvokeAsync (() => {
+							currentSearch = null;
+							searchEntry.Entry.Text = String.Empty;
+							Find (null);
 
-						var buildOutputDataSource = new BuildOutputDataSource (BuildOutput.GetRootNodes (showDiagnostics));
-						(treeView.Columns [0].Views [0] as BuildOutputTreeCellView).BuildOutputNodeField = buildOutputDataSource.BuildOutputNodeField;
+							var buildOutputDataSource = new BuildOutputDataSource (BuildOutput.GetRootNodes (showDiagnostics));
+							(treeView.Columns [0].Views [0] as BuildOutputTreeCellView).BuildOutputNodeField = buildOutputDataSource.BuildOutputNodeField;
 
-						treeView.DataSource = buildOutputDataSource;
-						cellView.OnDataSourceChanged ();
+							treeView.DataSource = buildOutputDataSource;
+							cellView.OnDataSourceChanged ();
 
-						// Expand root nodes and nodes with errors
-						ExpandErrorOrWarningsNodes (treeView, buildOutputDataSource, false);
-						processingCompletion.TrySetResult (null);
+							// Expand root nodes and nodes with errors
+							ExpandErrorOrWarningsNodes (treeView, buildOutputDataSource, false);
+							processingCompletion.TrySetResult (null);
 
-						FileNameChanged?.Invoke (this, filePathLocation.IsEmpty ?
-													$"{GettextCatalog.GetString ("Build Output")} {DateTime.Now.ToString ("h:mm tt yyyy-MM-dd")}.binlog" :
-													(string) filePathLocation);
-					});
+							ViewContentName = filePathLocation.IsEmpty ?
+							                                  GettextCatalog.GetString ("Build Output {0}.binlog", DateTime.Now.ToString ("h:mm tt yyyy-MM-dd")) :
+							                                  (string)filePathLocation;
+							FileNameChanged?.Invoke (this, ViewContentName);
+						});
+					}
 				} catch (Exception ex) {
 					processingCompletion.TrySetException (ex);
 				}
@@ -668,6 +718,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 		{
 			if (BuildOutput != null) {
 				BuildOutput.OutputChanged -= OnOutputChanged;
+				BuildOutput.ProjectStarted -= OnProjectStarted;
+				BuildOutput.ProjectFinished -= OnProjectFinished;
 				BuildOutput = null;
 			}
 
@@ -716,7 +768,9 @@ namespace MonoDevelop.Ide.BuildOutputView
 				this.widget = widget;
 				Reset ();
 
-				list = (node == null || node.Parent == null) ? DataSource.RootNodes : NodesWithChildren (node.Parent.Children);
+				list = (node == null || node.Parent == null) ?
+					DataSource?.RootNodes?.Where (x => x.NodeType != BuildOutputNodeType.BuildSummary).ToList () :
+				    NodesWithChildren (node.Parent.Children);
 			}
 
 			IReadOnlyList<BuildOutputNode> NodesWithChildren(IEnumerable<BuildOutputNode> nodes)
@@ -730,7 +784,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 				return aux;
 			}
 
-			public int IconCount => list.Count;
+			public int IconCount => list?.Count ?? 0;
 
 			public void ActivateItem (int n)
 			{

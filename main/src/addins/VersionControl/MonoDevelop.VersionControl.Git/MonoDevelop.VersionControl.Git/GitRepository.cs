@@ -73,9 +73,6 @@ namespace MonoDevelop.VersionControl.Git
 			Disposed = true;
 			base.Dispose ();
 
-			if (VersionControlSystem != null)
-				((GitVersionControl)VersionControlSystem).UnregisterRepo (this);
-
 			if (RootRepository != null)
 				RootRepository.Dispose ();
 			foreach (var rep in cachedSubmodules)
@@ -605,6 +602,15 @@ namespace MonoDevelop.VersionControl.Git
 			monitor.EndTask ();
 		}
 
+		static bool HandleAuthenticationException (AuthenticationException e)
+		{
+			var ret = MessageService.AskQuestion (
+								GettextCatalog.GetString ("Remote server error: {0}", e.Message),
+								GettextCatalog.GetString ("Retry authentication?"),
+								AlertButton.Yes, AlertButton.No);
+			return ret == AlertButton.Yes;
+		}
+
 		static void RetryUntilSuccess (ProgressMonitor monitor, Action<GitCredentialsType> func, Action onRetry = null)
 		{
 			bool retry;
@@ -617,10 +623,7 @@ namespace MonoDevelop.VersionControl.Git
 						retry = false;
 					} catch (AuthenticationException e) {
 						GitCredentials.InvalidateCredentials (credType);
-						retry = AlertButton.Yes == MessageService.AskQuestion (
-							GettextCatalog.GetString ("Remote server error: {0}", e.Message),
-							GettextCatalog.GetString ("Retry authentication?"),
-							AlertButton.Yes, AlertButton.No);
+						retry = Runtime.RunInMainThread (() => HandleAuthenticationException (e)).Result;
 						if (!retry)
 							monitor?.ReportError (e.Message, null);
 					} catch (VersionControlException e) {

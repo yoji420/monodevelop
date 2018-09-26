@@ -1,5 +1,6 @@
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <Import Project="..\..\..\MonoDevelop.props" />
+  <Import Project="$(ReferencesGtk)" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -14,13 +15,6 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
-    <Reference Include="Mono.Posix" />
-    <Reference Include="glade-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="glib-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="pango-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="atk-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="gdk-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="gtk-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
     <Reference Include="System.Core" />
     <Reference Include="System.Reflection.Metadata">
       <HintPath>..\..\..\build\bin\System.Reflection.Metadata.dll</HintPath>
@@ -122,48 +116,20 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="MonoDevelop.GtkCore.addin.xml">
-      <LogicalName>MonoDevelop.GtkCore.addin.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\Dialog.xft.xml">
-      <LogicalName>Dialog.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\Window.xft.xml">
-      <LogicalName>Window.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\Widget.xft.xml">
-      <LogicalName>Widget.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\ActionGroup.xft.xml">
-      <LogicalName>ActionGroup.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="gui.glade">
-      <LogicalName>gui.glade</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\ActionGroupPartial.xft.xml">
-      <LogicalName>ActionGroupPartial.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\DialogPartial.xft.xml">
-      <LogicalName>DialogPartial.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\WidgetPartial.xft.xml">
-      <LogicalName>WidgetPartial.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\DrawingArea.xft.xml">
-      <LogicalName>DrawingArea.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="templates\WindowPartial.xft.xml">
-      <LogicalName>WindowPartial.xft.xml</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="icons\widget.png">
-      <LogicalName>widget.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="icons\actiongroup.png">
-      <LogicalName>actiongroup.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="icons\image-x-generic.png">
-      <LogicalName>image-x-generic.png</LogicalName>
-    </EmbeddedResource>
+    <EmbeddedResource Include="MonoDevelop.GtkCore.addin.xml" />
+    <EmbeddedResource Include="templates\Dialog.xft.xml" />
+    <EmbeddedResource Include="templates\Window.xft.xml" />
+    <EmbeddedResource Include="templates\Widget.xft.xml" />
+    <EmbeddedResource Include="templates\ActionGroup.xft.xml" />
+    <EmbeddedResource Include="gui.glade" />
+    <EmbeddedResource Include="templates\ActionGroupPartial.xft.xml" />
+    <EmbeddedResource Include="templates\DialogPartial.xft.xml" />
+    <EmbeddedResource Include="templates\WidgetPartial.xft.xml" />
+    <EmbeddedResource Include="templates\DrawingArea.xft.xml" />
+    <EmbeddedResource Include="templates\WindowPartial.xft.xml" />
+    <EmbeddedResource Include="icons\widget.png" />
+    <EmbeddedResource Include="icons\actiongroup.png" />
+    <EmbeddedResource Include="icons\image-x-generic.png" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="MonoDevelop.GtkCore.Commands\GladeCommands.cs" />

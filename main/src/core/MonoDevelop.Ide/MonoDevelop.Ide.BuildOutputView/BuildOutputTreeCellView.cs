@@ -104,28 +104,72 @@ namespace MonoDevelop.Ide.BuildOutputView
 		public static readonly Xwt.Drawing.Image WarningIcon = ImageService.GetIcon (Ide.Gui.Stock.BuildWarning, Gtk.IconSize.Menu);
 		public static readonly Xwt.Drawing.Image WarningIconSmall = ImageService.GetIcon (Ide.Gui.Stock.BuildWarningSmall, Gtk.IconSize.Menu);
 		public static readonly Xwt.Drawing.Image FolderIcon = ImageService.GetIcon (Ide.Gui.Stock.OpenFolder, Gtk.IconSize.Menu);
+		public static readonly Xwt.Drawing.Image EmptyIcon = ImageService.GetIcon (Ide.Gui.Stock.Empty);
 	}
 
-	class BuildOutputCellSelection
+	enum TextSelectionState
 	{
-		public int SelectionStart { get; private set; }
-		public int SelectionEnd { get; private set; }
-		public BuildOutputNode Node { get; private set; }
+		Clicked,
+		Selecting,
+		Selected //selection is finished but we want continue drawing the selection
+	}
 
-		public BuildOutputCellSelection (BuildOutputNode node, int selectionStart, int selectionEnd)
+	class TextSelection<T> where T : class
+	{
+		const int SelectionDistancePixel = 1;
+
+		Point selectionStartingPoint;
+		int selectionStart;
+		int selectionEnd;
+
+		public T Content { get; private set; }
+
+		public TextSelectionState State { get; private set; } = TextSelectionState.Clicked;
+		public int Index => Math.Min (selectionStart, selectionEnd);
+		public int Length => Math.Abs (selectionEnd - selectionStart) + 1;
+
+		public bool IsStarting (T currentContent) => State != TextSelectionState.Selected && currentContent == Content;
+
+		public bool IsShown (T currentContent) => (State == TextSelectionState.Selecting || State == TextSelectionState.Selected) && currentContent == Content;
+
+		public void Stop ()
 		{
-			SelectionStart = selectionStart;
-			SelectionEnd = selectionEnd;
-			Node = node;
+			State = TextSelectionState.Selected;
+		}
+
+		public void Set (int pos, Point position)
+		{
+			selectionEnd = pos;
+
+			if (State == TextSelectionState.Clicked && Away (selectionStartingPoint, position, SelectionDistancePixel)) {
+				State = TextSelectionState.Selecting;
+			}
+		}
+
+		static bool Away (Point first, Point second, double maxPixel)
+		{
+			if (Math.Abs (first.X - second.X) > maxPixel)
+				return true;
+			if (Math.Abs (first.Y - second.Y) > maxPixel)
+				return true;
+			return false;
+		}
+
+		public void Start (Point position, int pos, T content)
+		{
+			selectionStart = selectionEnd = pos;
+			State = TextSelectionState.Clicked;
+			selectionStartingPoint = position;
+			Content = content;
 		}
 	}
 
 	class BuildOutputTreeCellView : CanvasCellView
 	{
-		static readonly Image BuildExpandIcon = ImageService.GetIcon (Ide.Gui.Stock.BuildExpand, Gtk.IconSize.Menu).WithSize (16);
-		static readonly Image BuildCollapseIcon = ImageService.GetIcon (Ide.Gui.Stock.BuildCollapse, Gtk.IconSize.Menu).WithSize (16);
-		static readonly Image BuildExpandIconSel = BuildExpandIcon.WithStyles ("sel");
-		static readonly Image BuildCollapseIconSel = BuildCollapseIcon.WithStyles ("sel");
+		static readonly Image BuildExpandIcon = ImageService.GetIcon (Ide.Gui.Stock.BuildExpand, Gtk.IconSize.Menu)
+			.WithSize (10);
+		static readonly Image BuildCollapseIcon = ImageService.GetIcon (Ide.Gui.Stock.BuildCollapse, Gtk.IconSize.Menu)
+			.WithSize (10);
 
 		public EventHandler<BuildOutputNode> GoToTask;
 		public EventHandler<BuildOutputNode> ExpandErrors;
@@ -133,15 +177,19 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		class ViewStatus
 		{
-			TextLayout layout = new TextLayout ();
+			internal TextLayout layout = new TextLayout ();
 
 			bool expanded;
 			public Rectangle LastRenderBounds = Rectangle.Zero;
 			public Rectangle LastRenderLayoutBounds = Rectangle.Zero;
+			public Rectangle LastRenderImageBounds = Rectangle.Zero;
 			public Rectangle LastRenderExpanderBounds = Rectangle.Zero;
 			public double CollapsedRowHeight = -1;
 			public double CollapsedLayoutHeight = -1;
 			public double LayoutYPadding = 0;
+			public double ExpanderYPadding = 0;
+			public double IconYPadding = 0;
+
 			public int NewLineCharIndex = -1;
 
 			public Rectangle TaskLinkRenderRectangle = Rectangle.Zero;
@@ -161,67 +209,90 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 						layout.Width = layout.Height = -1;
 						Reload ();
-						CalculateLayout (LastRenderBounds, out var outLayout, out var outLayoutBounds, out var outexpanderRect);
-						LastRenderLayoutBounds = outLayoutBounds;
-						LastRenderExpanderBounds = outexpanderRect;
+						CalculateLayout (LastRenderBounds);
 					}
 				}
 			}
 
-			internal bool CalculateLayout (Rectangle cellArea, out TextLayout textLayout, out Rectangle layoutBounds, out Rectangle expanderRect)
+			internal bool CalculateLayout (Rectangle cellArea)
 			{
 				// Relayouting is expensive and not required if the size didn't change. Just update the locations in that case.
 				if (!LastRenderBounds.IsEmpty && LastRenderBounds.Contains (LastRenderLayoutBounds) && cellArea.Size == LastRenderBounds.Size) {
-					expanderRect = LastRenderExpanderBounds.Offset (-LastRenderBounds.X, -LastRenderBounds.Y).Offset (cellArea.X, cellArea.Y);
-					layoutBounds = LastRenderLayoutBounds.Offset (-LastRenderBounds.X, -LastRenderBounds.Y).Offset (cellArea.X, cellArea.Y);
-					textLayout = GetUnconstrainedLayout ();
-					textLayout.Width = layoutBounds.Width;
+					LastRenderExpanderBounds = LastRenderExpanderBounds.Offset (-LastRenderBounds.X, -LastRenderBounds.Y).Offset (cellArea.X, cellArea.Y);
+					LastRenderLayoutBounds = LastRenderLayoutBounds.Offset (-LastRenderBounds.X, -LastRenderBounds.Y).Offset (cellArea.X, cellArea.Y);
+					LastRenderImageBounds = LastRenderImageBounds.Offset (-LastRenderBounds.X, -LastRenderBounds.Y).Offset (cellArea.X, cellArea.Y);
+
+					LastRenderBounds = cellArea;
 					return true; // no resize is required
 				}
 
-				expanderRect = Rectangle.Zero;
-				layoutBounds = cellArea;
-				layoutBounds.X += ImageSize - 3;
-				layoutBounds.Width -= (ImageSize - 3) + DefaultInformationContainerWidth;
+				var imageRect = Rectangle.Zero;
+				var expanderRect = Rectangle.Zero;
 
-				textLayout = GetUnconstrainedLayout ();
+				var textLayout = GetUnconstrainedLayout ();
 				var textSize = textLayout.GetSize ();
 
-				if (textSize.Width > layoutBounds.Width || NewLineCharIndex > -1) {
-					layoutBounds.Width -= (ImageSize + ImagePadding);
-					layoutBounds.Width = Math.Max (MinLayoutWidth, layoutBounds.Width);
-					textLayout.Width = layoutBounds.Width;
+				var maxWidth = cellArea.Width - DefaultInformationContainerWidth;
+				if (HasIcon) {
+					maxWidth -= ImageSize + ImagePadding;
+				}
+
+				var startX = cellArea.X;
+				var needsExpander = textSize.Width > maxWidth || NewLineCharIndex > -1;
+				if (needsExpander) {
+					expanderRect = new Rectangle (startX, cellArea.Y + ExpanderYPadding, ImageSize, ImageSize);
+					startX += ImageSize;
+				}
+
+				if (HasIcon) {
+					imageRect = new Rectangle (startX, cellArea.Y, ImageSize, ImageSize);
+					startX += ImageSize + ImagePadding;
+				}
+
+				var layoutBounds = cellArea;
+				layoutBounds.X = startX;
+
+				layoutBounds.Width -= startX - cellArea.X + DefaultInformationContainerWidth;
+
+				textLayout.Width = layoutBounds.Width;
+
+				if (needsExpander) {
 					textLayout.Height = Expanded ? -1 : cellArea.Height;
-
 					textSize = textLayout.GetSize ();
-
-					var expanderX = layoutBounds.Right + ImagePadding;
-					if (expanderX > 0)
-						expanderRect = new Rectangle (expanderX, cellArea.Y + ((CollapsedLayoutHeight - BuildExpandIcon.Height) * .5), BuildExpandIcon.Width, BuildExpandIcon.Height);
+				} else {
+					layoutBounds.Height = textSize.Height;
 				}
 
 				layoutBounds.Height = textSize.Height;
 				layoutBounds.Y += LayoutYPadding;
-				expanderRect.Y += LayoutYPadding;
+
+				LastRenderImageBounds = imageRect;
+				LastRenderExpanderBounds = expanderRect;
+				LastRenderLayoutBounds = layoutBounds;
+				LastRenderBounds = cellArea;
 
 				// check that the text still fits into the cell
 				if (!cellArea.Contains (layoutBounds))
 					return false; // resize required
 								  // if the cell is too large, we need to resize it
-				else if (Expanded && Math.Abs (layoutBounds.Height - LayoutYPadding - cellArea.Height) > 1)
+				if (Expanded && Math.Abs (layoutBounds.Height - LayoutYPadding - cellArea.Height) > 1)
 					return false; // resize required
 				return true;
 			}
 
 			public BuildOutputNode Node { get; private set; }
+			readonly public Image Icon;
 
 			public bool IsRootNode => Node.Parent == null;
+
+			public bool HasIcon => Icon != Resources.EmptyIcon;
 
 			public ViewStatus (BuildOutputNode node)
 			{
 				if (node == null)
 					throw new ArgumentNullException (nameof (node));
 				Node = node;
+				Icon = Node.GetImage ();
 				layout.Font = GetFont (node);
 			}
 
@@ -229,7 +300,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 			{
 				if (IsRootNode) {
 					return defaultBoldFont;
-				} else if (node.IsCommandLine) {
+				}
+				if (node.IsCommandLine) {
 					return monospaceFont;
 				}
 				return defaultFont;
@@ -255,6 +327,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 						CollapsedLayoutHeight = textSize.Height;
 						CollapsedRowHeight = Math.Max (textSize.Height, ImageSize);
 						LayoutYPadding = (CollapsedRowHeight - CollapsedLayoutHeight) * .5;
+						ExpanderYPadding = (CollapsedRowHeight - BuildExpandIcon.Height) * .5;
+						IconYPadding = (CollapsedRowHeight - ImageSize) * .5;
 					}
 				}
 				layout.Trimming = Expanded ? TextTrimming.Word : TextTrimming.WordElipsis;
@@ -266,11 +340,13 @@ namespace MonoDevelop.Ide.BuildOutputView
 				return layout;
 			}
 
-			internal void Initialize ()
+			internal string Duration { get; private set; }
+
+			internal void Initialize (bool isShowingDiagnostics)
 			{
 				DrawsBottomLine = Node.Next == null || !(Node.Next.NodeType == BuildOutputNodeType.Error || Node.Next.NodeType == BuildOutputNodeType.Warning);
 				DrawsTopLine = Node.Previous == null || !(Node.Previous.NodeType == BuildOutputNodeType.Error || Node.Previous.NodeType == BuildOutputNodeType.Warning);
-
+				Duration = Node.GetDurationAsString (isShowingDiagnostics);
 				Reload ();
 			}
 		}
@@ -283,11 +359,12 @@ namespace MonoDevelop.Ide.BuildOutputView
 		const int LinesDisplayedCount = 1;
 		const int DefaultInformationContainerWidth = 370;
 		const int ImageSize = 16;
-		const int ImagePadding = 0;
+		const int ImagePadding = 4;
 		const int FontSize = 11;
 		const int MinLayoutWidth = 30;
 
 		const int DefaultExpandClickDelay = 250;
+
 		DateTime lastExpanderClick = DateTime.Now;
 
 		public Color StrongSelectionColor { get; set; }
@@ -297,12 +374,6 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		public IDataField<bool> HasBackgroundColorField { get; set; }
 		public IDataField<BuildOutputNode> BuildOutputNodeField { get; set; }
-
-		// Used to track the selection
-		int selectionStart;
-		int selectionEnd;
-		BuildOutputNode selectionRow;
-		bool clicking;
 
 		IBuildOutputContextProvider contextProvider;
 
@@ -316,8 +387,6 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		string GetInformationMessage (BuildOutputNode buildOutputNode) => GettextCatalog.GetString ("{0} | {1}     Started at {2}", buildOutputNode.Configuration, buildOutputNode.Platform, buildOutputNode.StartTime.ToString ("h:m tt on MMM d, yyyy"));
 
-		public BuildOutputCellSelection GetCurrentSelection () => new BuildOutputCellSelection (selectionRow, selectionStart, selectionEnd);
-
 		internal bool IsViewClickable (BuildOutputNode node, Point position)
 		{
 			var view = GetViewStatus (node);
@@ -329,6 +398,8 @@ namespace MonoDevelop.Ide.BuildOutputView
 		static Font monospaceFont;
 
 		double lastErrorPanelStartX;
+
+		public TextSelection<BuildOutputNode> TextSelection { get; private set; }
 
 		static BuildOutputTreeCellView ()
 		{
@@ -418,7 +489,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 			ctx.Fill();
 		}
 
-		protected override void OnDraw(Context ctx, Xwt.Rectangle cellArea)
+		protected override void OnDraw (Context ctx, Xwt.Rectangle cellArea)
 		{
 			var buildOutputNode = GetValue (BuildOutputNodeField);
 			var isSelected = Selected;
@@ -428,40 +499,44 @@ namespace MonoDevelop.Ide.BuildOutputView
 			//Draw the node background
 			FillCellBackground (ctx, buildOutputNode, status);
 
-			//Draw the image row
-			DrawImage (ctx, cellArea, buildOutputNode.GetImage (), (cellArea.Left - 3), ImageSize, isSelected, ImagePadding);
-
 			// If the height required by the text is not the same as what was calculated in OnGetRequiredSize(), it means that
 			// the required height has changed and CalcLayout will return false. In that case call QueueResize(),
 			// so that OnGetRequiredSize() is called again and the row is properly resized.
-			if (!status.CalculateLayout (cellArea, out var layout, out var layoutBounds, out var expanderRect))
+			if (!status.CalculateLayout (cellArea))
 				QueueResize ();
 
 			status.LastRenderBounds = cellArea;
-			status.LastRenderLayoutBounds = layoutBounds;
-			status.LastRenderExpanderBounds = expanderRect;
+
+			var layout = status.layout;
+			var layoutBounds = status.LastRenderLayoutBounds;
+
+			//Draw the image row
+			if (status.HasIcon) {
+				//Draw the image row
+				DrawImage (ctx, cellArea, status.Icon, status.LastRenderImageBounds.X, ImageSize, isSelected, status.IconYPadding);
+			}
 
 			ctx.SetColor (Styles.GetTextColor (buildOutputNode, UseStrongSelectionColor && isSelected));
 
 			HighlightSearchResults (layout, contextProvider.SearchString, Styles.GetTextColor (buildOutputNode, false), Styles.GetSearchMatchBackgroundColor (isSelected));
 
 			// Render the selection
-			if (selectionRow == buildOutputNode && selectionStart != selectionEnd) {
-				layout.SetBackground (Styles.CellTextSelectionColorSecundary, Math.Min (selectionStart, selectionEnd), Math.Abs (selectionEnd - selectionStart));
+			if (TextSelection?.IsShown (buildOutputNode) ?? false) {
+				layout.SetBackground (Styles.CellTextSelectionColorSecundary, TextSelection.Index, TextSelection.Length);
 			}
 
 			// Draw the text
 			ctx.DrawTextLayout (layout, layoutBounds.X, layoutBounds.Y);
 
 			// Draw right hand expander
-			if (!expanderRect.IsEmpty) {
+			if (!status.LastRenderExpanderBounds.IsEmpty) {
 				// Draw the image
 				Image icon;
 				if (status.Expanded)
-					icon = isSelected ? BuildCollapseIconSel : BuildCollapseIcon;
+					icon = BuildCollapseIcon;
 				else
-					icon = isSelected ? BuildExpandIconSel : BuildExpandIcon;
-				ctx.DrawImage (icon, expanderRect.X, expanderRect.Y);
+					icon = BuildExpandIcon;
+				ctx.DrawImage (icon, status.LastRenderExpanderBounds.X, status.LastRenderExpanderBounds.Y);
 			}
 
 			//Information section
@@ -473,7 +548,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 				status.ErrorsRectangle.X = startX;
 				status.ErrorsRectangle.Y = cellArea.Y;
-				DrawImage (ctx, cellArea, Resources.ErrorIconSmall, startX, ImageSize, isSelected, ImagePadding);
+				DrawImage (ctx, cellArea, Resources.ErrorIconSmall, startX, ImageSize, isSelected);
 
 				startX += ImageSize + 2;
 				var errors = GettextCatalog.GetString ("{0} errors", buildOutputNode.ErrorCount.ToString ());
@@ -489,7 +564,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 				status.WarningsRectangle.X = startX;
 				status.WarningsRectangle.Y = cellArea.Y;
 
-				DrawImage (ctx, cellArea, Resources.WarningIconSmall, startX, ImageSize, isSelected, ImagePadding);
+				DrawImage (ctx, cellArea, Resources.WarningIconSmall, startX, ImageSize, isSelected);
 
 				var warnings = GettextCatalog.GetString ("{0} warnings", buildOutputNode.WarningCount.ToString ());
 				startX += ImageSize + 2;
@@ -499,10 +574,23 @@ namespace MonoDevelop.Ide.BuildOutputView
 				status.WarningsRectangle.Width = size.Width + ImageSize + 2;
 				status.WarningsRectangle.Height = size.Height;
 
+				//Right area // based in our DefaultInformationContainerWidth
+				startX = cellArea.X + (cellArea.Width - DefaultInformationContainerWidth);
+
+				//Draw of duration based in startX position
+				DrawNodeDuration (ctx, cellArea, status.Duration, startX, ImagePadding);
+
 			} else if (buildOutputNode.NodeType == BuildOutputNodeType.Build) {
 				var textStartX = layoutBounds.X + layout.GetSize ().Width + 24;
 				DrawText (ctx, cellArea, textStartX, GetInformationMessage (buildOutputNode), status.LayoutYPadding, defaultFont, cellArea.Width - textStartX);
 			}
+		}
+
+		double DrawNodeDuration (Context ctx, Rectangle cellArea, string duration, double textStartX, double padding)
+		{
+			var size = DrawText (ctx, cellArea, textStartX, duration, padding, defaultFont, DefaultInformationContainerWidth).GetSize ();
+			textStartX += size.Width + 10;
+			return textStartX;
 		}
 
 		void DrawNodeInformation (Context ctx, Xwt.Rectangle cellArea, BuildOutputNode buildOutputNode, double padding, bool isSelected, int imageSize, int imagePadding, ViewStatus status)
@@ -519,8 +607,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 					status.TaskLinkRenderRectangle.X = lastErrorPanelStartX + 5;
 					status.TaskLinkRenderRectangle.Y = cellArea.Y + padding;
 
-					var layout = DrawText (ctx, cellArea, status.TaskLinkRenderRectangle.X, text, padding, font: defaultFont, trimming: TextTrimming.Word, underline: true);
+					//TODO: we can do a cache of the text layout and only resize
+					//Our link text layoud needs to be created with real size
+					var layout = CreateTextLayout (cellArea, text, defaultFont, trimming: TextTrimming.WordElipsis, underline: true);
 					status.TaskLinkRenderRectangle.Size = layout.GetSize ();
+
+					//Now we calculate if fits the content and readjust
+					var maxSize = cellArea.Width + cellArea.X + padding - status.TaskLinkRenderRectangle.X;
+					status.TaskLinkRenderRectangle.Width = layout.Width = maxSize;
+
+					DrawText (ctx, layout, cellArea, status.TaskLinkRenderRectangle.X, padding);
 					return;
 				}
 				return;
@@ -528,15 +624,13 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 			UpdateInformationTextColor (ctx, isSelected);
 
+			//Right area // based in our DefaultInformationContainerWidth
 			var textStartX = cellArea.X + (cellArea.Width - DefaultInformationContainerWidth);
 
-			Size size = Size.Zero;
-
 			//Duration text
-			var duration = buildOutputNode.GetDurationAsString (contextProvider.IsShowingDiagnostics);
+			var duration = status.Duration;
 			if (duration != "") {
-				size = DrawText (ctx, cellArea, textStartX, duration, padding, defaultFont, DefaultInformationContainerWidth).GetSize ();
-				textStartX += size.Width + 10;
+				textStartX = DrawNodeDuration (ctx, cellArea, duration, textStartX, padding);
 			}
 
 			if (textStartX > lastErrorPanelStartX) {
@@ -553,7 +647,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 			    (buildOutputNode.ErrorCount > 0 || buildOutputNode.WarningCount > 0)) {
 
 				if (buildOutputNode.ErrorCount > 0) {
-					DrawImage (ctx, cellArea, Resources.ErrorIconSmall, textStartX, imageSize, isSelected, imagePadding);
+					DrawImage (ctx, cellArea, Resources.ErrorIconSmall, textStartX, imageSize, isSelected);
 					textStartX += ImageSize + 2;
 					var errors = buildOutputNode.ErrorCount.ToString ();
 
@@ -562,42 +656,58 @@ namespace MonoDevelop.Ide.BuildOutputView
 				}
 
 				if (buildOutputNode.WarningCount > 0) {
-					DrawImage (ctx, cellArea, Resources.WarningIconSmall, textStartX, imageSize, isSelected, imagePadding);
+					DrawImage (ctx, cellArea, Resources.WarningIconSmall, textStartX, imageSize, isSelected);
 					textStartX += ImageSize + 2;
 					DrawText (ctx, cellArea, textStartX, buildOutputNode.WarningCount.ToString (), padding, defaultFont, 10, trimming: TextTrimming.Word);
 				}
 			}
 		}
 
-		TextLayout DrawText (Context ctx, Xwt.Rectangle cellArea, double x, string text, double padding, Font font, double width = 0, TextTrimming trimming = TextTrimming.WordElipsis, bool underline = false) 
+		static TextLayout CreateTextLayout (Xwt.Rectangle cellArea, string text, Font font, TextTrimming trimming = TextTrimming.WordElipsis, bool underline = false, double width = 0) 
 		{
-			if (width < 0) {
-				throw new Exception ("width cannot be negative");
-			}
+			var descriptionTextLayout = new TextLayout {
+				Font = font,
+				Text = text,
+				Trimming = trimming
+			};
 
-			var descriptionTextLayout = new TextLayout ();
-
-			descriptionTextLayout.Font = font;
-			descriptionTextLayout.Text = text;
-			descriptionTextLayout.Trimming = trimming;
-		
 			if (underline) {
 				descriptionTextLayout.SetUnderline (0, text.Length);
 			}
-		
+
 			if (width != 0) {
 				descriptionTextLayout.Width = width;
 			}
 
 			descriptionTextLayout.Height = cellArea.Height;
 
-			ctx.DrawTextLayout (descriptionTextLayout, x, cellArea.Y + padding);
 			return descriptionTextLayout;
 		}
 
-		void DrawImage (Context ctx, Xwt.Rectangle cellArea, Image image, double x, int imageSize, bool isSelected, double topPadding = 0)
+		static TextLayout DrawText (Context ctx, Xwt.Rectangle cellArea, double x, string text, double padding, Font font, double width = 0, TextTrimming trimming = TextTrimming.WordElipsis, bool underline = false) 
 		{
-			ctx.DrawImage (isSelected ? image.WithStyles ("sel") : image, x, cellArea.Top + (cellArea.Height / 2 - imageSize / 2), imageSize, imageSize);
+			if (width < 0) {
+				throw new Exception ("width cannot be negative");
+			}
+
+			var textLayout = CreateTextLayout (cellArea, text, font, trimming, underline);
+			DrawText (ctx, textLayout, cellArea, x, padding);
+			return textLayout;
+		}
+
+		static void DrawText (Context ctx, TextLayout textLayout, Xwt.Rectangle cellArea, double x, double padding)
+		{
+			ctx.DrawTextLayout (textLayout, x, cellArea.Y + padding);
+		}
+
+		void DrawImage (Context ctx, Xwt.Rectangle cellArea, Image image, double x, int imageSize, bool isSelected)
+		{
+			DrawImage (ctx, cellArea, image, x, imageSize, isSelected, (cellArea.Height / 2 - imageSize / 2));
+		}
+
+		void DrawImage (Context ctx, Xwt.Rectangle cellArea, Image image, double x, int imageSize, bool isSelected, double topPadding)
+		{
+			ctx.DrawImage (isSelected ? image.WithStyles ("sel") : image, x, cellArea.Top + topPadding, imageSize, imageSize);
 		}
 
 		void UpdateInformationTextColor (Context ctx, bool isSelected)
@@ -657,7 +767,7 @@ namespace MonoDevelop.Ide.BuildOutputView
 			var node = GetValue (BuildOutputNodeField);
 			if (node != null) {
 				var status = GetViewStatus (node);
-				status.Initialize ();
+				status.Initialize (contextProvider.IsShowingDiagnostics);
 			}
 		}
 
@@ -673,25 +783,24 @@ namespace MonoDevelop.Ide.BuildOutputView
 			var node = GetValue (BuildOutputNodeField);
 			var status = GetViewStatus (node);
 
-			if (status.TaskLinkRenderRectangle.Contains (args.Position) || status.ErrorsRectangle.Contains (args.Position) || status.WarningsRectangle.Contains (args.Position)) {
+			var containsClickableElement = status.TaskLinkRenderRectangle.Contains (args.Position) || status.ErrorsRectangle.Contains (args.Position) || status.WarningsRectangle.Contains (args.Position);
+			if (containsClickableElement) {
 				ParentWidget.Cursor = CursorType.Hand;
 			} else {
 				ParentWidget.Cursor = CursorType.Arrow;
 			}
 
-			status.CalculateLayout (status.LastRenderBounds, out var layout, out var layoutBounds, out var expanderRect);
+			status.CalculateLayout (status.LastRenderBounds);
 
-			var insideText = layoutBounds.Contains (args.Position);
-			if (clicking && insideText && selectionRow == node) {
-				var pos = layout.GetIndexFromCoordinates (args.Position.X - layoutBounds.X, args.Position.Y - layoutBounds.Y);
+			var insideText = status.LastRenderLayoutBounds.Contains (args.Position);
+			if ((TextSelection?.IsStarting (node) ?? false)) {
+				var pos = status.layout.GetIndexFromCoordinates (args.Position.X - status.LastRenderLayoutBounds.X, args.Position.Y - status.LastRenderLayoutBounds.Y);
 				if (pos != -1) {
-					selectionEnd = pos;
+					TextSelection.Set (pos, args.Position);
 					QueueDraw ();
 				}
-			} else {
-				if (insideText) {
-					ParentWidget.Cursor = CursorType.IBeam;
-				}
+			} else if (insideText && !containsClickableElement)  {
+				ParentWidget.Cursor = CursorType.IBeam;
 			}
 		}
 
@@ -716,12 +825,11 @@ namespace MonoDevelop.Ide.BuildOutputView
 					ExpandWarnings?.Invoke (this, node);
 					return;
 				}
-
 			}
 
-			status.CalculateLayout (status.LastRenderBounds, out var layout, out var layoutBounds, out var expanderRect);
+			status.CalculateLayout (status.LastRenderBounds);
 
-			if (expanderRect != Rectangle.Zero && expanderRect.Contains (args.Position)) {
+			if (status.LastRenderExpanderBounds != Rectangle.Zero && status.LastRenderExpanderBounds.Contains (args.Position)) {
 				if (DateTime.Now.Subtract (lastExpanderClick).TotalMilliseconds < DefaultExpandClickDelay) {
 					return;
 				}
@@ -731,15 +839,16 @@ namespace MonoDevelop.Ide.BuildOutputView
 				return;
 			}
 
-			if (args.Button == PointerButton.Left && layoutBounds.Contains (args.Position)) {
-
-				var pos = layout.GetIndexFromCoordinates (args.Position.X - layoutBounds.X, args.Position.Y - layoutBounds.Y);
+			if (args.Button == PointerButton.Left && status.LastRenderLayoutBounds.Contains (args.Position)) {
+				var pos = status.layout.GetIndexFromCoordinates (args.Position.X - status.LastRenderLayoutBounds.X, args.Position.Y - status.LastRenderLayoutBounds.Y);
 				if (pos != -1) {
-					selectionStart = selectionEnd = pos;
-					selectionRow = node;
-					clicking = true;
-				} else
-					selectionRow = null;
+					if (TextSelection == null) {
+						TextSelection = new TextSelection<BuildOutputNode> ();
+					}
+					TextSelection.Start (args.Position, pos, node);
+				} else {
+					TextSelection = null;
+				}
 
 				QueueDraw ();
 			}
@@ -756,11 +865,21 @@ namespace MonoDevelop.Ide.BuildOutputView
 
 		protected override void OnButtonReleased (ButtonEventArgs args)
 		{
-			if (clicking) {
-				clicking = false;
-				QueueDraw ();
+			if (TextSelection != null) {
+				if (TextSelection.State == TextSelectionState.Selecting) {
+					TextSelection.Stop ();
+					QueueDraw ();
+				} else if (TextSelection.State == TextSelectionState.Clicked) {
+					ClearSelection ();
+				}
 			}
 			base.OnButtonReleased (args);
+		}
+
+		public void ClearSelection ()
+		{
+			TextSelection = null;
+			QueueDraw ();
 		}
 
 		protected override void OnMouseExited ()

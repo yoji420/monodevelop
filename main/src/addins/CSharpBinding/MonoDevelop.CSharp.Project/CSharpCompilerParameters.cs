@@ -32,6 +32,7 @@ using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Host;
 using MonoDevelop.Core;
 using MonoDevelop.Core.Serialization;
 using MonoDevelop.Projects;
@@ -107,9 +108,32 @@ namespace MonoDevelop.CSharp.Project
 			warninglevel = pset.GetValue<int?> ("WarningLevel", null);
 		}
 
+		static MetadataReferenceResolver CreateMetadataReferenceResolver (IMetadataService metadataService, string projectDirectory, string outputDirectory)
+		{
+			ImmutableArray<string> assemblySearchPaths;
+			if (projectDirectory != null && outputDirectory != null) {
+				assemblySearchPaths = ImmutableArray.Create (projectDirectory, outputDirectory);
+			} else if (projectDirectory != null) {
+				assemblySearchPaths = ImmutableArray.Create (projectDirectory);
+			} else if (outputDirectory != null) {
+				assemblySearchPaths = ImmutableArray.Create (outputDirectory);
+			} else {
+				assemblySearchPaths = ImmutableArray<string>.Empty;
+			}
+
+			return new WorkspaceMetadataFileReferenceResolver (metadataService, new RelativePathResolver (assemblySearchPaths, baseDirectory: projectDirectory));
+		}
+
 		public override CompilationOptions CreateCompilationOptions ()
 		{
 			var project = (CSharpProject)ParentProject;
+			var workspace = Ide.TypeSystem.TypeSystemService.GetWorkspace (project.ParentSolution);
+			var metadataReferenceResolver = CreateMetadataReferenceResolver (
+					workspace.Services.GetService<IMetadataService> (),
+					project.BaseDirectory,
+					ParentConfiguration.OutputDirectory
+			);
+
 			var options = new CSharpCompilationOptions (
 				OutputKind.ConsoleApplication,
 				false,
@@ -129,6 +153,7 @@ namespace MonoDevelop.CSharp.Project
 				WarningLevel,
 				null,
 				false,
+				metadataReferenceResolver: metadataReferenceResolver,
 				assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default,
 				strongNameProvider: new DesktopStrongNameProvider ()
 			);
@@ -136,8 +161,22 @@ namespace MonoDevelop.CSharp.Project
 			return options.WithPlatform (GetPlatform ())
 				.WithGeneralDiagnosticOption (TreatWarningsAsErrors ? ReportDiagnostic.Error : ReportDiagnostic.Default)
 				.WithOptimizationLevel (Optimize ? OptimizationLevel.Release : OptimizationLevel.Debug)
-				.WithSpecificDiagnosticOptions (GetSuppressedWarnings ().ToDictionary (
-					suppress => suppress, _ => ReportDiagnostic.Suppress));
+				.WithSpecificDiagnosticOptions (GetSpecificDiagnosticOptions());
+		}
+
+		Dictionary<string, ReportDiagnostic> GetSpecificDiagnosticOptions ()
+		{
+			var result = new Dictionary<string, ReportDiagnostic> ();
+			foreach (var warning in GetSuppressedWarnings ())
+				result [warning] = ReportDiagnostic.Suppress;
+
+			var globalRuleSet = Ide.TypeSystem.TypeSystemService.RuleSetManager.GetGlobalRuleSet ();
+			if (globalRuleSet != null) {
+				foreach (var kv in globalRuleSet.SpecificDiagnosticOptions) {
+					result [kv.Key] = kv.Value;
+				}
+			}
+			return result;
 		}
 
 		Microsoft.CodeAnalysis.Platform GetPlatform ()
@@ -168,8 +207,7 @@ namespace MonoDevelop.CSharp.Project
 			var symbols = GetDefineSymbols ();
 			if (configuration != null)
 				symbols = symbols.Concat (configuration.GetDefineSymbols ()).Distinct ();
-
-			langVersion.TryParse (out LanguageVersion lv);
+			LanguageVersionFacts.TryParse (langVersion, out LanguageVersion lv);
 
 			return new CSharpParseOptions (
 				lv,
@@ -182,7 +220,7 @@ namespace MonoDevelop.CSharp.Project
 
 		public LanguageVersion LangVersion {
 			get {
-				if (!langVersion.TryParse (out LanguageVersion val)) {
+				if (!LanguageVersionFacts.TryParse (langVersion, out LanguageVersion val)) {
 					throw new Exception ("Unknown LangVersion string '" + langVersion + "'");
 				}
 				return val;

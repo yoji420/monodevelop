@@ -80,7 +80,6 @@ namespace MonoDevelop.Ide.Gui
 
 		bool closeAll;
 
-		bool fullscreen;
 		Rectangle normalBounds = new Rectangle(0, 0, MinimumWidth, MinimumHeight);
 		
 		Gtk.Container rootWidget;
@@ -332,19 +331,19 @@ namespace MonoDevelop.Ide.Gui
 			topMenu = null;
 		}
 
-		public void AddInfoBar (string description, params InfoBarItem [] items)
+		public void AddInfoBar (InfoBarOptions options)
 		{
 #if NATIVE_INFO_BAR
 			// disabled for now, needs a patch in gtk.
 			Xwt.Widget infoBar = null;
 			Xwt.Toolkit.NativeEngine.Invoke (() => {
-				infoBar = new XwtInfoBar (description, items);
+				infoBar = new XwtInfoBar (options.Description, options.Items);
 			});
 			var widget = Xwt.Toolkit.CurrentEngine.WrapWidget (infoBar);
 			var gtkWidget = widget.ToGtkWidget ();
 			infoBarFrame.Add (gtkWidget);
 #else
-			var infoBar = new XwtInfoBar (description, items);
+			var infoBar = new XwtInfoBar (options.Description, options.Items);
 			infoBarFrame.Add (infoBar.ToGtkWidget ());
 #endif
 		}
@@ -641,10 +640,9 @@ namespace MonoDevelop.Ide.Gui
 		
 		public ICustomXmlSerializer Memento {
 			get {
-				WorkbenchMemento memento   = new WorkbenchMemento (new Properties ());
-				int x, y, width, height;
-				GetPosition (out x, out y);
-				GetSize (out width, out height);
+				var memento  = new WorkbenchMemento (new Properties ());
+				GetPosition (out int x, out int y);
+				GetSize (out int width, out int height);
 				// HACK: always capture bounds on OS X because we don't restore Gdk.WindowState.Maximized due to
 				// the bug mentioned below. So we simular Maximized by capturing the Maximized size.
 				if (GdkWindow.State == 0 || Platform.IsMac) {
@@ -653,7 +651,7 @@ namespace MonoDevelop.Ide.Gui
 					memento.Bounds = normalBounds;
 				}
 				memento.WindowState = GdkWindow.State;
-				memento.FullScreen  = fullscreen;
+				memento.FullScreen  = FullScreen;
 				return memento.ToProperties ();
 			}
 			set {
@@ -806,6 +804,7 @@ namespace MonoDevelop.Ide.Gui
 			BrandingService.ApplicationNameChanged -= ApplicationNameChanged;
 			
 			PropertyService.Set ("SharpDevelop.Workbench.WorkbenchMemento", this.Memento);
+
 			IdeApp.OnExited ();
 			OnClosed (null);
 			

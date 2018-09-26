@@ -300,6 +300,13 @@ namespace MonoDevelop.CSharp.Completion.Provider
 			}
 		}
 
+		// custom property dictionary keys
+		const string PositionKey = "Position";
+		const string NewMethodKey = "NewMethod";
+		const string MethodNameKey = "MethodName";
+		const string InsertBeforeKey = "InsertBefore";
+		const string InsertAfterKey = "InsertAfter";
+
 		CompletionItem CreateNewMethodCreationItem (SyntaxNode parent, SemanticModel semanticModel, ITypeSymbol delegateType, int position, string optDelegateName, IMethodSymbol delegateMethod, CancellationToken cancellationToken)
 		{
 			var sb = StringBuilderCache.Allocate ();
@@ -338,22 +345,22 @@ namespace MonoDevelop.CSharp.Completion.Provider
 			sb.Append (indent);
 			sb.Append ("}");
 			sb.Append (eolMarker);
-			pDict = pDict.Add ("Position", position.ToString ());
-			pDict = pDict.Add ("NewMethod", StringBuilderCache.ReturnAndFree (sb));
-			pDict = pDict.Add ("MethodName", varName);
+			pDict = pDict.Add (PositionKey, position.ToString ());
+			pDict = pDict.Add (NewMethodKey, StringBuilderCache.ReturnAndFree (sb));
+			pDict = pDict.Add (MethodNameKey, varName);
 
 			return CompletionItem.Create (uniqueName, properties: pDict, tags: newMethodTags, rules: NewMethodRules.WithMatchPriority (int.MaxValue));
 		}
-		static readonly ImmutableArray<string> newMethodTags = ImmutableArray<string>.Empty.AddRange (new [] { "NewMethod" });
+		static readonly ImmutableArray<string> newMethodTags = ImmutableArray<string>.Empty.AddRange (new [] { NewMethodKey });
 
 		CompletionItem CreateCompletionItem (string displayString, string description, string insertBefore, string insertAfter, int position)
 		{
 			var pDict = ImmutableDictionary<string, string>.Empty;
 			if (description != null)
 				pDict = pDict.Add ("DescriptionMarkup", "- <span foreground=\"darkgray\" size='small'>" + description + "</span>");
-			pDict = pDict.Add ("Position", position.ToString ());
-			pDict = pDict.Add ("InsertBefore", insertBefore);
-			pDict = pDict.Add ("InsertAfter", insertAfter);
+			pDict = pDict.Add (PositionKey, position.ToString ());
+			pDict = pDict.Add (InsertBeforeKey, insertBefore);
+			pDict = pDict.Add (InsertAfterKey, insertAfter);
 
 			return CompletionItem.Create (displayString, properties: pDict, tags: newMethodTags, rules: DelegateRules);
 		}
@@ -364,12 +371,16 @@ namespace MonoDevelop.CSharp.Completion.Provider
 
 			TextChange change;
 			if (newMethod != null) {
-				change = new TextChange (new TextSpan (item.Span.Start, item.Span.Length), item.Properties ["MethodName"] + ";");
+				change = new TextChange (new TextSpan (item.Span.Start, item.Span.Length), item.Properties [MethodNameKey] + ";");
 				var semanticModel = await doc.GetSemanticModelAsync (cancellationToken);
+				if (!doc.IsOpen () || await doc.IsForkedDocumentWithSyntaxChangesAsync (cancellationToken))
+					return CompletionChange.Create (change);
 
 				await Runtime.RunInMainThread (delegate {
 					var document = IdeApp.Workbench.ActiveDocument;
 					var editor = document.Editor;
+					if (editor.EditMode != EditMode.Edit)
+						return;
 					var parsedDocument = document.ParsedDocument;
 					var declaringType = semanticModel.GetEnclosingSymbolMD<INamedTypeSymbol> (item.Span.Start, default (CancellationToken));
 					var insertionPoints = InsertionPointService.GetInsertionPoints (
@@ -406,21 +417,29 @@ namespace MonoDevelop.CSharp.Completion.Provider
 		{
 			string thisLineIndent = null;
 			string oneIndent = null;
-			var editor = IdeApp.Workbench?.ActiveDocument?.Editor;
-			if (editor != null) {
-				await Runtime.RunInMainThread (delegate {
-					thisLineIndent = editor.IndentationTracker.GetIndentationString (editor.OffsetToLineNumber (int.Parse (properties ["Position"])));
+			string eol = null;
+			await Runtime.RunInMainThread (delegate {
+				var editor = IdeApp.Workbench?.ActiveDocument?.Editor;
+				var indentationTracker = editor?.IndentationTracker;
+				if (indentationTracker != null) {
+					if (!properties.TryGetValue (PositionKey, out var positionString)) {
+						LoggingService.LogError ("DelegateCompletionProvider: 'Position' not found in property string.");
+						thisLineIndent = oneIndent = "\t";
+						return;
+					}
+					var offset = int.Parse (positionString);
+					var lineNumber = editor.OffsetToLineNumber (offset);
+					thisLineIndent = indentationTracker.GetIndentationString (lineNumber);
 					oneIndent = editor.Options.TabsToSpaces ? new string (' ', editor.Options.TabSize) : "\t";
-				});
-			} else {
-				thisLineIndent = oneIndent = "\t";
-			}
+				} else {
+					thisLineIndent = oneIndent = "\t";
+				}
+				eol = editor?.EolMarker ?? "\n";
+			});
 
-			var eol = editor?.EolMarker ?? "\n";
-
-			properties.TryGetValue ("InsertBefore", out string beforeText);
-			properties.TryGetValue ("InsertAfter", out string afterText);
-			properties.TryGetValue ("NewMethod", out string newMethod);
+			properties.TryGetValue (InsertBeforeKey, out string beforeText);
+			properties.TryGetValue (InsertAfterKey, out string afterText);
+			properties.TryGetValue (NewMethodKey, out string newMethod);
 
 			return (beforeText?.Replace ("\n", eol).Replace ("$thisLineIndent$", thisLineIndent).Replace ("$oneIndent$", oneIndent),
 			        afterText?.Replace ("\n", eol).Replace ("$thisLineIndent$", thisLineIndent).Replace ("$oneIndent$", oneIndent),
