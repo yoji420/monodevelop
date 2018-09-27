@@ -46,6 +46,7 @@ using Microsoft.VisualStudio.Text.Editor;
 using MonoDevelop.Ide;
 using System.Threading;
 using Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion;
+using Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion.Data;
 
 namespace MonoDevelop.SourceEditor.VsCompletion
 {
@@ -362,7 +363,7 @@ namespace MonoDevelop.SourceEditor.VsCompletion
 					}
 
 
-					Xwt.Drawing.Image icon = ImageService.GetImage (new Microsoft.VisualStudio.Core.Imaging.ImageId (item.CompletionItem.Icon.Guid, item.CompletionItem.Icon.Id));
+					Xwt.Drawing.Image icon = ImageService.GetImage (item.CompletionItem.Icon.ImageId);
 					int iconHeight, iconWidth;
 					if (icon != null) {
 						if (drawIconAsSelected)
@@ -568,7 +569,7 @@ namespace MonoDevelop.SourceEditor.VsCompletion
 		{
 			box.ShowAll ();
 			var manager = textView.GetSpaceReservationManager ("completion");
-			agent = manager.CreatePopupAgent (presentation.ApplicableSpan, Microsoft.VisualStudio.Text.Adornments.PopupStyles.None, Xwt.Toolkit.CurrentEngine.WrapWidget (box, Xwt.NativeWidgetSizing.DefaultPreferredSize));
+			agent = manager.CreatePopupAgent (presentation.ApplicableToSpan, Microsoft.VisualStudio.Text.Adornments.PopupStyles.None, Xwt.Toolkit.CurrentEngine.WrapWidget (box, Xwt.NativeWidgetSizing.DefaultPreferredSize));
 			//HACK...
 			Theme = ((Microsoft.VisualStudio.Text.Editor.Implementation.PopupAgent.PopUpContainer)((Microsoft.VisualStudio.Text.Editor.Implementation.PopupAgent)agent)._popup)._popup.Theme;
 			Theme.CornerRadius = 0;
@@ -586,7 +587,7 @@ namespace MonoDevelop.SourceEditor.VsCompletion
 		{
 			presentationData = presentation;
 			filteredItems = presentationData.Items.ToList ();
-			SelectionEnabled = !presentationData.UseSuggestionMode;
+			SelectionEnabled = !presentationData.UseSoftSelection;
 			CalcVisibleRows ();
 			SetAdjustments ();
 			SelectedItemIndex = presentationData.SelectedItemIndex;

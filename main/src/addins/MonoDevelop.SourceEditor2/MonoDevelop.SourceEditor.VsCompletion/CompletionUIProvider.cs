@@ -27,6 +27,7 @@ using System;
 using System.ComponentModel.Composition;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion;
+using Microsoft.VisualStudio.Language.Intellisense.AsyncCompletion.Data;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Utilities;
 
@@ -38,6 +39,8 @@ namespace MonoDevelop.SourceEditor.VsCompletion
 	public class CompletionUIProvider : ICompletionPresenterProvider
 	{
 		public int ResultsPerPage => CompletionUI.rows;
+
+		public CompletionPresenterOptions Options { get; } = new CompletionPresenterOptions(9);
 
 		public ICompletionPresenter GetOrCreate (ITextView textView)
 		{
