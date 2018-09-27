@@ -27,24 +27,12 @@ using System;
 using System.Composition;
 using Microsoft.CodeAnalysis.Experiments;
 using Microsoft.CodeAnalysis.Host.Mef;
-using Microsoft.VisualStudio.Text.Utilities;
 
 namespace MonoDevelop.Ide
 {
 	[ExportWorkspaceService (typeof (IExperimentationService), ServiceLayer.Host), Shared]
 	class ExperimentationService : IExperimentationService
 	{
-		public bool IsExperimentEnabled (string experimentName){
-			return true;
-		}
-	}
-
-	[Export (typeof (IExperimentationServiceInternal))]
-	class ExperimentationServiceInternal : IExperimentationServiceInternal
-	{
-		public bool IsCachedFlightEnabled (string flightName)
-		{
-			return "CompletionAPI" == flightName;
-		}
+		public bool IsExperimentEnabled (string experimentName) => true;
 	}
 }

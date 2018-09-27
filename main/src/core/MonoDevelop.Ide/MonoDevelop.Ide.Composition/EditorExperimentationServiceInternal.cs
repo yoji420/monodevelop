@@ -6,6 +6,6 @@ namespace MonoDevelop.Ide.Composition
 	[Export (typeof (IExperimentationServiceInternal))]
 	internal class EditorExperimentationServiceInternal : IExperimentationServiceInternal
 	{
-		public bool IsCachedFlightEnabled (string flightName) => false;
+		public bool IsCachedFlightEnabled (string flightName) => flightName == "CompletionAPI";
 	}
 }
