@@ -35,7 +35,7 @@ namespace MonoDevelop.Ide
 	class ExperimentationService : IExperimentationService
 	{
 		public bool IsExperimentEnabled (string experimentName){
-			return experimentName == WellKnownExperimentNames.EditorUseModernCompletionAPI;
+			return true;
 		}
 	}
 
