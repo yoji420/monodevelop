@@ -31,6 +31,7 @@ using System.Xml;
 
 using MonoDevelop.Core;
 using System.Collections.Immutable;
+using MonoDevelop.Utilities;
 
 namespace MonoDevelop.Projects.MSBuild
 {
@@ -38,6 +39,8 @@ namespace MonoDevelop.Projects.MSBuild
 	{
 		Dictionary<string,MSBuildProperty> properties = new Dictionary<string, MSBuildProperty> (StringComparer.OrdinalIgnoreCase);
 		internal List<MSBuildProperty> PropertiesAttributeOrder { get; } = new List<MSBuildProperty> ();
+		readonly RaceChecker raceChecker = new LoggingRaceChecker ();
+
 		public MSBuildPropertyGroup ()
 		{
 		}
@@ -63,31 +66,35 @@ namespace MonoDevelop.Projects.MSBuild
 
 		internal override void ReadUnknownAttribute (MSBuildXmlReader reader, string lastAttr)
 		{
-			MSBuildProperty prevSameName;
-			if (properties.TryGetValue (reader.LocalName, out prevSameName))
-				prevSameName.Overwritten = true;
+			using (raceChecker.Lock ()) {
+				MSBuildProperty prevSameName;
+				if (properties.TryGetValue (reader.LocalName, out prevSameName))
+					prevSameName.Overwritten = true;
 
-			var prop = new MSBuildProperty ();
-			prop.ParentNode = PropertiesParent;
-			prop.Owner = this;
-			prop.ReadUnknownAttribute (reader, lastAttr);
-			ChildNodes = ChildNodes.Add (prop);
-			properties [prop.Name] = prop; // If a property is defined more than once, we only care about the last registered value
-			PropertiesAttributeOrder.Add (prop);
+				var prop = new MSBuildProperty ();
+				prop.ParentNode = PropertiesParent;
+				prop.Owner = this;
+				prop.ReadUnknownAttribute (reader, lastAttr);
+				ChildNodes = ChildNodes.Add (prop);
+				properties [prop.Name] = prop; // If a property is defined more than once, we only care about the last registered value
+				PropertiesAttributeOrder.Add (prop);
+			}
 		}
 
 		internal override void ReadChildElement (MSBuildXmlReader reader)
 		{
-			MSBuildProperty prevSameName;
-			if (properties.TryGetValue (reader.LocalName, out prevSameName))
-				prevSameName.Overwritten = true;
+			using (raceChecker.Lock ()) {
+				MSBuildProperty prevSameName;
+				if (properties.TryGetValue (reader.LocalName, out prevSameName))
+					prevSameName.Overwritten = true;
 
-			var prop = new MSBuildProperty ();
-			prop.ParentNode = PropertiesParent;
-			prop.Owner = this;
-			prop.Read (reader);
-			ChildNodes = ChildNodes.Add (prop);
-			properties [prop.Name] = prop; // If a property is defined more than once, we only care about the last registered value
+				var prop = new MSBuildProperty ();
+				prop.ParentNode = PropertiesParent;
+				prop.Owner = this;
+				prop.Read (reader);
+				ChildNodes = ChildNodes.Add (prop);
+				properties [prop.Name] = prop; // If a property is defined more than once, we only care about the last registered value
+			}
 		}
 
 		internal override string GetElementName ()
@@ -104,30 +111,32 @@ namespace MonoDevelop.Projects.MSBuild
 
 		internal void CopyFrom (MSBuildPropertyGroup other)
 		{
-			AssertCanModify ();
-			foreach (var node in other.ChildNodes) {
-				var prop = node as MSBuildProperty;
-				if (prop != null) {
-					var cp = prop.Clone ();
-					var currentPropIndex = ChildNodes.FindIndex (p => (p is MSBuildProperty) && ((MSBuildProperty)p).Name == prop.Name);
-					if (currentPropIndex != -1) {
-						var currentProp = (MSBuildProperty) ChildNodes [currentPropIndex];
-						ChildNodes = ChildNodes.SetItem (currentPropIndex, cp);
-					} else {
-						ChildNodes = ChildNodes.Add (cp);
-					}
-					properties [cp.Name] = cp;
-					cp.ParentNode = PropertiesParent;
-					cp.Owner = this;
-				} else
-					ChildNodes = ChildNodes.Add (node);
-			}
-			foreach (var prop in ChildNodes.OfType<MSBuildProperty> ().ToArray ()) {
-				if (!other.HasProperty (prop.Name))
-					RemoveProperty (prop);
-			}
+			using (raceChecker.Lock ()) {
+				AssertCanModify ();
+				foreach (var node in other.ChildNodes) {
+					var prop = node as MSBuildProperty;
+					if (prop != null) {
+						var cp = prop.Clone ();
+						var currentPropIndex = ChildNodes.FindIndex (p => (p is MSBuildProperty) && ((MSBuildProperty)p).Name == prop.Name);
+						if (currentPropIndex != -1) {
+							var currentProp = (MSBuildProperty) ChildNodes [currentPropIndex];
+							ChildNodes = ChildNodes.SetItem (currentPropIndex, cp);
+						} else {
+							ChildNodes = ChildNodes.Add (cp);
+						}
+						properties [cp.Name] = cp;
+						cp.ParentNode = PropertiesParent;
+						cp.Owner = this;
+					} else
+						ChildNodes = ChildNodes.Add (node);
+				}
+				foreach (var prop in ChildNodes.OfType<MSBuildProperty> ().ToArray ()) {
+					if (!other.HasProperty (prop.Name))
+						RemoveProperty (prop);
+				}
 
-			NotifyChanged ();
+				NotifyChanged ();
+			}
 		}
 
 		public bool IsImported {
@@ -170,13 +179,15 @@ namespace MonoDevelop.Projects.MSBuild
 
 		public MSBuildProperty GetProperty (string name, string condition)
 		{
-			MSBuildProperty prop;
-			properties.TryGetValue (name, out prop);
-			if (!string.IsNullOrEmpty (condition) && prop != null && prop.Condition != condition) {
-				// There may be more than one property with the same name and different condition. Try to find the correct one.
-				prop = ChildNodes.OfType<MSBuildProperty> ().FirstOrDefault (pr => pr.Name == name && pr.Condition == condition) ?? prop;
+			using (raceChecker.Lock ()) {
+				MSBuildProperty prop;
+				properties.TryGetValue (name, out prop);
+				if (!string.IsNullOrEmpty (condition) && prop != null && prop.Condition != condition) {
+					// There may be more than one property with the same name and different condition. Try to find the correct one.
+					prop = ChildNodes.OfType<MSBuildProperty> ().FirstOrDefault (pr => pr.Name == name && pr.Condition == condition) ?? prop;
+				}
+				return prop;
 			}
-			return prop;
 		}
 		
 		public IEnumerable<MSBuildProperty> GetProperties ()
@@ -246,41 +257,43 @@ namespace MonoDevelop.Projects.MSBuild
 
 		MSBuildProperty AddProperty (string name, string condition = null)
 		{
-			AssertCanModify ();
-			int i = propertyOrder.IndexOf (name);
-			int insertIndex = -1;
-			if (i != -1) {
-				var foundProp = FindExistingProperty (i - 1, -1);
-				if (foundProp != null) {
-					insertIndex = ChildNodes.IndexOf (foundProp) + 1;
-				} else {
-					foundProp = FindExistingProperty (i + 1, 1);
-					if (foundProp != null)
-						insertIndex = ChildNodes.IndexOf (foundProp);
+			using (raceChecker.Lock ()) {
+				AssertCanModify ();
+				int i = propertyOrder.IndexOf (name);
+				int insertIndex = -1;
+				if (i != -1) {
+					var foundProp = FindExistingProperty (i - 1, -1);
+					if (foundProp != null) {
+						insertIndex = ChildNodes.IndexOf (foundProp) + 1;
+					} else {
+						foundProp = FindExistingProperty (i + 1, 1);
+						if (foundProp != null)
+							insertIndex = ChildNodes.IndexOf (foundProp);
+					}
 				}
+
+				var prop = new MSBuildProperty (name);
+				prop.IsNew = true;
+				prop.ParentNode = PropertiesParent;
+				prop.Owner = this;
+				properties [name] = prop;
+
+				if (insertIndex != -1)
+					ChildNodes = ChildNodes.Insert (insertIndex, prop);
+				else
+					ChildNodes = ChildNodes.Add (prop);
+
+				if (condition != null)
+					prop.Condition = condition;
+				
+				prop.ResetIndent (false);
+
+				if (PropertyGroupListener != null)
+					PropertyGroupListener.PropertyAdded (prop);
+
+				NotifyChanged ();
+				return prop;
 			}
-
-			var prop = new MSBuildProperty (name);
-			prop.IsNew = true;
-			prop.ParentNode = PropertiesParent;
-			prop.Owner = this;
-			properties [name] = prop;
-
-			if (insertIndex != -1)
-				ChildNodes = ChildNodes.Insert (insertIndex, prop);
-			else
-				ChildNodes = ChildNodes.Add (prop);
-
-			if (condition != null)
-				prop.Condition = condition;
-			
-			prop.ResetIndent (false);
-
-			if (PropertyGroupListener != null)
-				PropertyGroupListener.PropertyAdded (prop);
-
-			NotifyChanged ();
-			return prop;
 		}
 
 		internal IPropertyGroupListener PropertyGroupListener { get; set; }
@@ -400,13 +413,15 @@ namespace MonoDevelop.Projects.MSBuild
 
 		public void RemoveProperty (MSBuildProperty prop)
 		{
-			AssertCanModify ();
-			if (PropertyGroupListener != null)
-				PropertyGroupListener.PropertyRemoved (prop);
-			prop.RemoveIndent ();
-			properties.Remove (prop.Name);
-			ChildNodes = ChildNodes.Remove (prop);
-			NotifyChanged ();
+			using (raceChecker.Lock ()) {
+				AssertCanModify ();
+				if (PropertyGroupListener != null)
+					PropertyGroupListener.PropertyRemoved (prop);
+				prop.RemoveIndent ();
+				properties.Remove (prop.Name);
+				ChildNodes = ChildNodes.Remove (prop);
+				NotifyChanged ();
+			}
 		}
 
 		internal void ResetIsNewFlags ()
@@ -438,7 +453,9 @@ namespace MonoDevelop.Projects.MSBuild
 
 		public bool HasProperty (string name)
 		{
-			return properties.ContainsKey (name);
+			lock (raceChecker.Lock ()) {
+				return properties.ContainsKey (name);
+			}
 		}
 
 		List<string> propertyOrder = new List<string> ();
