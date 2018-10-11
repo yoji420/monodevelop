@@ -453,7 +453,7 @@ namespace MonoDevelop.Projects.MSBuild
 
 		public bool HasProperty (string name)
 		{
-			lock (raceChecker.Lock ()) {
+			using (raceChecker.Lock ()) {
 				return properties.ContainsKey (name);
 			}
 		}
