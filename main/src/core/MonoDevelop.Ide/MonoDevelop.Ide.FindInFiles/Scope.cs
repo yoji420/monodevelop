@@ -121,6 +121,8 @@ namespace MonoDevelop.Ide.FindInFiles
 
 	public class WholeSolutionScope : Scope
 	{
+		public bool IncludeCodeBehind { get; internal set; }
+
 		public override int GetTotalWork (FilterOptions filterOptions)
 		{
 			int result = 0;
@@ -168,8 +170,7 @@ namespace MonoDevelop.Ide.FindInFiles
 							  () => new List<FileProvider> (),
 							  (project, loop, providers) => {
 								  var conf = project.DefaultConfiguration?.Selector;
-
-								  foreach (var file in project.Files) {
+								  foreach (var file in IncludeCodeBehind ? (IEnumerable<ProjectFile>)project.GetSourceFilesAsync (conf).Result : project.Files) {
 									  if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
 										  continue;
 									  if (!filterOptions.NameMatches (file.Name) || !File.Exists (file.Name))

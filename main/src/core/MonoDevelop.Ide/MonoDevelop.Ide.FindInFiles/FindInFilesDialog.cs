@@ -55,9 +55,10 @@ namespace MonoDevelop.Ide.FindInFiles
 			AllOpenFiles,
 			Directories,
 			CurrentDocument,
-			Selection
+			Selection,
+			WholeWorkspaceIncludingCodeBehind
 		}
-		
+
 		CheckButton checkbuttonRecursively;
 		ComboBoxEntry comboboxentryReplace;
 		ComboBoxEntry comboboxentryPath;
@@ -183,7 +184,7 @@ namespace MonoDevelop.Ide.FindInFiles
 			var scopeStore = new ListStore (typeof(string));
 
 			var workspace = IdeApp.Workspace;
-			if (workspace != null && workspace.GetAllSolutions ().Count() == 1) {
+			if (workspace != null && workspace.GetAllSolutions ().Count () == 1) {
 				scopeStore.AppendValues (GettextCatalog.GetString ("Whole solution"));
 			} else {
 				scopeStore.AppendValues (GettextCatalog.GetString ("All solutions"));
@@ -193,6 +194,11 @@ namespace MonoDevelop.Ide.FindInFiles
 			scopeStore.AppendValues (GettextCatalog.GetString ("Directories"));
 			scopeStore.AppendValues (GettextCatalog.GetString ("Current document"));
 			scopeStore.AppendValues (GettextCatalog.GetString ("Selection"));
+			if (workspace != null && workspace.GetAllSolutions ().Count () == 1) {
+				scopeStore.AppendValues (GettextCatalog.GetString ("Whole solution with code behind"));
+			} else {
+				scopeStore.AppendValues (GettextCatalog.GetString ("All solutions with code behind"));
+			}
 			comboboxScope.Model = scopeStore;
 
 			comboboxScope.Changed += HandleScopeChanged;
@@ -763,6 +769,10 @@ namespace MonoDevelop.Ide.FindInFiles
 			case SearchScope.WholeWorkspace:
 				scope = new WholeSolutionScope ();
 				break;
+			case SearchScope.WholeWorkspaceIncludingCodeBehind:
+				scope = new WholeSolutionScope () { IncludeCodeBehind = true } ;
+				break;
+
 			case SearchScope.CurrentProject:
 				var currentSelectedProject = IdeApp.ProjectOperations.CurrentSelectedProject;
 				if (currentSelectedProject != null) {
