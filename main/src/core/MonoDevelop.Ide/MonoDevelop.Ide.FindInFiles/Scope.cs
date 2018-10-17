@@ -169,8 +169,10 @@ namespace MonoDevelop.Ide.FindInFiles
 							  (project, loop, providers) => {
 								  var conf = project.DefaultConfiguration?.Selector;
 
-								  foreach (ProjectFile file in project.GetSourceFilesAsync (conf).Result.Where (f => filterOptions.NameMatches (f.Name) && File.Exists (f.Name))) {
+								  foreach (var file in project.Files) {
 									  if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
+										  continue;
+									  if (!filterOptions.NameMatches (file.Name) || !File.Exists (file.Name))
 										  continue;
 									  if (!DesktopService.GetFileIsText (file.FilePath))
 										  continue;
@@ -225,8 +227,10 @@ namespace MonoDevelop.Ide.FindInFiles
 				monitor.Log.WriteLine (GettextCatalog.GetString ("Looking in project '{0}'", project.Name));
 				var alreadyVisited = new HashSet<string> ();
 				var conf = project.DefaultConfiguration?.Selector;
-				foreach (ProjectFile file in project.GetSourceFilesAsync (conf).Result.Where (f => filterOptions.NameMatches (f.Name) && File.Exists (f.Name))) {
+				foreach (var file in project.Files) {
 					if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
+						continue;
+					if (!filterOptions.NameMatches (file.Name) || !File.Exists (file.Name))
 						continue;
 					if (!DesktopService.GetFileIsText (file.Name))
 						continue;
@@ -262,7 +266,7 @@ namespace MonoDevelop.Ide.FindInFiles
 					yield return new OpenFileProvider (document.Editor, document.Project);
 			}
 		}
-
+		
 		public override string GetDescription (FilterOptions filterOptions, string pattern, string replacePattern)
 		{
 			if (replacePattern == null)
