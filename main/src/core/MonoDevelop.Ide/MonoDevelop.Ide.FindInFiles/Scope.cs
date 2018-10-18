@@ -231,7 +231,7 @@ namespace MonoDevelop.Ide.FindInFiles
 				foreach (var file in project.Files) {
 					if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
 						continue;
-					if (!filterOptions.NameMatches (file.Name) || !File.Exists (file.Name))
+					if (!filterOptions.NameMatches (file.Name)
 						continue;
 					if (!DesktopService.GetFileIsText (file.Name))
 						continue;
