@@ -55,17 +55,18 @@ namespace MonoDevelop.Ide.FindInFiles
 			AllOpenFiles,
 			Directories,
 			CurrentDocument,
-			Selection,
-			WholeWorkspaceIncludingCodeBehind
+			Selection
 		}
 
 		CheckButton checkbuttonRecursively;
-		ComboBoxEntry comboboxentryReplace;
+		SearchEntry searchEntryFind;
+		SearchEntry searchEntryReplace;
 		ComboBoxEntry comboboxentryPath;
 		SearchEntry searchentryFileMask;
 		Button buttonBrowsePaths;
 		Button buttonReplace;
 		Label labelFileMask;
+		Label labelFind2;
 		Label labelReplace;
 		Label labelPath;
 		HBox hboxPath;
@@ -146,7 +147,15 @@ namespace MonoDevelop.Ide.FindInFiles
 		{
 			Build ();
 			IdeTheme.ApplyTheme (this);
-			
+			// Container child tableFindAndReplace.Gtk.Table+TableChild
+			this.searchEntryFind = new global::MonoDevelop.Components.SearchEntry ();
+			labelFind2 = new Label { Text = GettextCatalog.GetString ("_Find:"), Xalign = 0f, UseUnderline = true };
+			this.labelFind2.MnemonicWidget = this.searchEntryFind;
+			searchEntryFind.Show ();
+			labelFind2.Show ();
+			SetupAccessibility ();
+			TableAddRow (tableFindAndReplace, 0, labelFind2, searchEntryFind);
+
 			properties = PropertyService.Get ("MonoDevelop.FindReplaceDialogs.SearchOptions", new Properties ());
 			SetButtonIcon (toggleReplaceInFiles, "gtk-find-and-replace");
 			SetButtonIcon (toggleFindInFiles, "gtk-find");
@@ -194,11 +203,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			scopeStore.AppendValues (GettextCatalog.GetString ("Directories"));
 			scopeStore.AppendValues (GettextCatalog.GetString ("Current document"));
 			scopeStore.AppendValues (GettextCatalog.GetString ("Selection"));
-			if (workspace != null && workspace.GetAllSolutions ().Count () == 1) {
-				scopeStore.AppendValues (GettextCatalog.GetString ("Whole solution with code behind"));
-			} else {
-				scopeStore.AppendValues (GettextCatalog.GetString ("All solutions with code behind"));
-			}
 			comboboxScope.Model = scopeStore;
 
 			comboboxScope.Changed += HandleScopeChanged;
@@ -209,7 +213,7 @@ namespace MonoDevelop.Ide.FindInFiles
 				toggleReplaceInFiles.Toggle ();
 			else
 				toggleFindInFiles.Toggle ();
-
+			searchEntryFind.ShowAll ();
 			if (IdeApp.Workbench.ActiveDocument != null) {
 				var view = IdeApp.Workbench.ActiveDocument.Editor;
 				if (view != null) {
@@ -220,7 +224,7 @@ namespace MonoDevelop.Ide.FindInFiles
 						} else {
 							if (comboboxScope.Active == (int) SearchScope.Selection)
 								comboboxScope.Active = (int) SearchScope.CurrentDocument;
-							comboboxentryFind.Entry.Text = selectedText;
+							searchEntryFind.Entry.Text = selectedText;
 						}
 					} else if (comboboxScope.Active == (int) SearchScope.Selection) {
 						comboboxScope.Active = (int) SearchScope.CurrentDocument;
@@ -228,8 +232,8 @@ namespace MonoDevelop.Ide.FindInFiles
 					
 				}
 			}
-			comboboxentryFind.Entry.SelectRegion (0, comboboxentryFind.ActiveText.Length);
-			comboboxentryFind.GrabFocus ();
+			searchEntryFind.Entry.SelectRegion (0, searchEntryFind.Entry.Text.Length);
+			searchEntryFind.GrabFocus ();
 			DeleteEvent += delegate { Destroy (); };
 			UpdateStopButton ();
 			UpdateSensitivity ();
@@ -242,23 +246,22 @@ namespace MonoDevelop.Ide.FindInFiles
 				UpdateSensitivity ();
 				return true;
 			});
-			SetupAccessibility ();
 		}
 
 		void SetupAccessibility ()
 		{
-			comboboxentryFind.SetCommonAccessibilityAttributes ("FindInFilesDialog.comboboxentryFind",
+			searchEntryFind.SetCommonAccessibilityAttributes ("FindInFilesDialog.comboboxentryFind",
 												"Find",
 												GettextCatalog.GetString ("Enter string to find"));
-			comboboxentryFind.SetAccessibilityLabelRelationship (labelFind);
+			searchEntryFind.SetAccessibilityLabelRelationship (labelFind2);
 		}
 
 		void SetupAccessibilityForReplace ()
 		{
-			comboboxentryReplace.SetCommonAccessibilityAttributes ("FindInFilesDialog.comboboxentryReplace",
+			searchEntryReplace.SetCommonAccessibilityAttributes ("FindInFilesDialog.comboboxentryReplace",
 											"Replace",
 											GettextCatalog.GetString ("Enter string to replace"));
-			comboboxentryReplace.SetAccessibilityLabelRelationship (labelReplace);
+			searchEntryReplace.SetAccessibilityLabelRelationship (labelReplace);
 		}
 
 		void SetupAccessibilityForPath ()
@@ -311,10 +314,13 @@ namespace MonoDevelop.Ide.FindInFiles
 				table.Add (column2);
 				
 				tr = (Table.TableChild) table[column2];
-				tr.XOptions = (AttachOptions) 4;
+				if (row > 0)
+					tr.XOptions = (AttachOptions) 4;
 				tr.YOptions = (AttachOptions) 4;
-				tr.BottomAttach = row + 1;
-				tr.TopAttach = row;
+				if (row > 0) {
+					tr.BottomAttach = row + 1;
+					tr.TopAttach = row;
+				}
 				tr.LeftAttach = 1;
 				tr.RightAttach = 2;
 			}
@@ -360,16 +366,20 @@ namespace MonoDevelop.Ide.FindInFiles
 		{
 			if (replaceMode)
 				return;
-			
+
 			labelReplace = new Label { Text = GettextCatalog.GetString ("_Replace:"), Xalign = 0f, UseUnderline = true };
-			comboboxentryReplace = new ComboBoxEntry ();
-			LoadHistory ("MonoDevelop.FindReplaceDialogs.ReplaceHistory", comboboxentryReplace);
-			comboboxentryReplace.Show ();
+			searchEntryReplace = new global::MonoDevelop.Components.SearchEntry ();
+			//LoadHistory ("MonoDevelop.FindReplaceDialogs.ReplaceHistory", comboboxentryReplace);
+			searchEntryReplace.Show ();
 			labelReplace.Show ();
 			SetupAccessibilityForReplace ();
+			var history = GetHistory (replaceHistoryKey);
+			if (history.Count > 0) {
+				searchEntryReplace.Menu = new Menu ();
+				AddHistoryMenuItems (searchEntryReplace, GettextCatalog.GetString ("Recent Replaces"), history);
+			}
+			TableAddRow (tableFindAndReplace, 1, labelReplace, searchEntryReplace);
 
-			TableAddRow (tableFindAndReplace, 1, labelReplace, comboboxentryReplace);
-			
 			buttonReplace = new Button () {
 				Label = "gtk-find-and-replace",
 				UseUnderline = true,
@@ -402,9 +412,9 @@ namespace MonoDevelop.Ide.FindInFiles
 			
 			buttonSearch.GrabDefault ();
 			
-			StoreHistory ("MonoDevelop.FindReplaceDialogs.ReplaceHistory", comboboxentryReplace);
-			TableRemoveRow (tableFindAndReplace, 1, labelReplace, comboboxentryReplace, true);
-			comboboxentryReplace = null;
+			//StoreHistory ("MonoDevelop.FindReplaceDialogs.ReplaceHistory", comboboxentryReplace);
+			TableRemoveRow (tableFindAndReplace, 1, labelReplace, searchEntryReplace, true);
+			searchEntryReplace = null;
 			labelReplace = null;
 			
 			replaceMode = false;
@@ -432,7 +442,7 @@ namespace MonoDevelop.Ide.FindInFiles
 			hboxPath = new HBox ();
 			comboboxentryPath = new ComboBoxEntry ();
 			comboboxentryPath.Destroyed += ComboboxentryPathDestroyed;
-			LoadHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", comboboxentryPath);
+			//LoadHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", comboboxentryPath);
 			comboboxentryPath.Show ();
 			hboxPath.PackStart (comboboxentryPath);
 			
@@ -602,7 +612,7 @@ namespace MonoDevelop.Ide.FindInFiles
 
 		static void ComboboxentryPathDestroyed (object sender, EventArgs e)
 		{
-			StoreHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", (ComboBoxEntry)sender);
+			//StoreHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", (ComboBoxEntry)sender);
 		}
 
 		void ButtonBrowsePathsClicked (object sender, EventArgs e)
@@ -627,47 +637,74 @@ namespace MonoDevelop.Ide.FindInFiles
 		}
 
 		const char historySeparator = '\n';
+		const string searchHistoryKey = "MonoDevelop.FindReplaceDialogs.FindHistory";
+		const string replaceHistoryKey = "MonoDevelop.FindReplaceDialogs.ReplaceHistory";
+		static ConfigurationProperty<bool> caseSensitive = ConfigurationProperty.Create ("CaseSensitive", false);
+		static ConfigurationProperty<bool> wholeWordsOnly = ConfigurationProperty.Create ("WholeWordsOnly", false);
+		static ConfigurationProperty<bool> regexSearch = ConfigurationProperty.Create ("RegexSearch", false);
+		static ConfigurationProperty<bool> includeCodeBehind = ConfigurationProperty.Create ("FindInFilesDialog.IncludeCodeBehind", false);
+
 		void InitFromProperties ()
 		{
 			comboboxScope.Active = properties.Get ("Scope", (int) SearchScope.WholeWorkspace);
-				
-			//checkbuttonRecursively.Active    = properties.Get ("SearchPathRecursively", true);
-			//checkbuttonFileMask.Active       = properties.Get ("UseFileMask", false);
-			checkbuttonCaseSensitive.Active = properties.Get ("CaseSensitive", false);
-			checkbuttonWholeWordsOnly.Active = properties.Get ("WholeWordsOnly", false);
-			checkbuttonRegexSearch.Active = properties.Get ("RegexSearch", false);
 
-			LoadHistory ("MonoDevelop.FindReplaceDialogs.FindHistory", comboboxentryFind);
-			
-//			LoadHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", comboboxentryPath);
-//			LoadHistory ("MonoDevelop.FindReplaceDialogs.FileMaskHistory", comboboxentryFileMask);
+			searchEntryFind.Menu = new Menu ();
+
+			var caseSensitiveItem = new CheckMenuItem (GettextCatalog.GetString ("_Case sensitive"));
+			caseSensitiveItem.Active = caseSensitive;
+			caseSensitiveItem.DrawAsRadio = false;
+			caseSensitiveItem.Toggled += delegate {
+				caseSensitive.Value = caseSensitiveItem.Active;
+			};
+			searchEntryFind.Menu.Add (caseSensitiveItem);
+
+			var wholeWordsOnlyItem = new CheckMenuItem (GettextCatalog.GetString ("_Whole words only"));
+			wholeWordsOnlyItem.Active = wholeWordsOnly;
+			wholeWordsOnlyItem.DrawAsRadio = false;
+			wholeWordsOnlyItem.Toggled += delegate {
+				wholeWordsOnly.Value = wholeWordsOnlyItem.Active;
+			};
+			searchEntryFind.Menu.Add (wholeWordsOnlyItem);
+
+			var regexSearchItem = new CheckMenuItem (GettextCatalog.GetString ("_Regex search"));
+			regexSearchItem.Active = regexSearch;
+			regexSearchItem.DrawAsRadio = false;
+			regexSearchItem.Toggled += delegate {
+				regexSearch.Value = regexSearchItem.Active;
+			};
+			searchEntryFind.Menu.Add (regexSearchItem);
+
+			var includeCodeBehindItem = new CheckMenuItem (GettextCatalog.GetString ("_Include code behind files"));
+			includeCodeBehindItem.Active = regexSearch;
+			includeCodeBehindItem.DrawAsRadio = false;
+			includeCodeBehindItem.Toggled += delegate {
+				includeCodeBehind.Value = includeCodeBehindItem.Active;
+			};
+			searchEntryFind.Menu.Add (includeCodeBehindItem);
+
+			var history = GetHistory (searchHistoryKey);
+			if (history.Count > 0) {
+				searchEntryFind.Menu.Add (new SeparatorMenuItem ());
+				AddHistoryMenuItems (searchEntryFind, GettextCatalog.GetString ("Recent Searches"), history);
+			}
 		}
 
-		static void LoadHistory (string propertyName, ComboBoxEntry entry)
+		private void AddHistoryMenuItems (MonoDevelop.Components.SearchEntry searchEntry, string text, List<string> history)
 		{
-			var ec = new EntryCompletion ();
-/*			entry.Changed += delegate {
-				if (!entry.Entry.HasFocus)
-					entry.Entry.GrabFocus ();
+			var recentSearches = new MenuItem (text);
+			recentSearches.Sensitive = false;
+			searchEntry.Menu.Add (recentSearches);
 
-			};*/
-
-
-			entry.Entry.Completion = ec;
-			var store = new ListStore (typeof(string));
-			entry.Entry.Completion.Model = store;
-			entry.Model = store;
-			entry.Entry.ActivatesDefault = true;
-			entry.TextColumn = 0;
-			var history = PropertyService.Get<string> (propertyName);
-			if (!string.IsNullOrEmpty (history)) {
-				string[] items = history.Split (historySeparator);
-				foreach (string item in items) {
-					if (string.IsNullOrEmpty (item))
-						continue;
-					store.AppendValues (item);
-				}
-				entry.Entry.Text = items[0];
+			foreach (string item in history) {
+				if (item == searchEntry.Entry.Text)
+					continue;
+				var recentItem = new MenuItem (item);
+				recentItem.Name = item;
+				recentItem.Activated += delegate (object mySender, EventArgs myE) {
+					var cur = (MenuItem)mySender;
+					searchEntry.Entry.Text = cur.Name;
+				};
+				searchEntry.Menu.Add (recentItem);
 			}
 		}
 
@@ -675,39 +712,14 @@ namespace MonoDevelop.Ide.FindInFiles
 		{
 			if (writeScope)
 				properties.Set ("Scope", comboboxScope.Active);
-//			properties.Set ("SearchPathRecursively", checkbuttonRecursively.Active);
-//			properties.Set ("UseFileMask", checkbuttonFileMask.Active);
-			properties.Set ("CaseSensitive", checkbuttonCaseSensitive.Active);
-			properties.Set ("WholeWordsOnly", checkbuttonWholeWordsOnly.Active);
-			properties.Set ("RegexSearch", checkbuttonRegexSearch.Active);
 
-			StoreHistory ("MonoDevelop.FindReplaceDialogs.FindHistory", comboboxentryFind);
-			if (replaceMode)
-				StoreHistory ("MonoDevelop.FindReplaceDialogs.ReplaceHistory", comboboxentryReplace);
 			if (searchentryFileMask != null)
 				properties.Set ("MonoDevelop.FindReplaceDialogs.FileMask", searchentryFileMask.Query);
-//			StoreHistory ("MonoDevelop.FindReplaceDialogs.PathHistory", comboboxentryPath);
-			//StoreHistory ("MonoDevelop.FindReplaceDialogs.FileMaskHistory", comboboxentryFileMask);
 		}
 
-		static void StoreHistory (string propertyName, ComboBoxEntry comboBox)
+		static void StoreHistory (string propertyKey, List<string> history)
 		{
-			var store = (ListStore)comboBox.Model;
-			var history = new List<string> ();
-			TreeIter iter;
-			if (store.GetIterFirst (out iter)) {
-				do {
-					history.Add ((string)store.GetValue (iter, 0));
-				} while (store.IterNext (ref iter));
-			}
-			const int limit = 20;
-			if (history.Count > limit) {
-				history.RemoveRange (history.Count - (history.Count - limit), history.Count - limit);
-			}
-			if (history.Contains (comboBox.Entry.Text))
-				history.Remove (comboBox.Entry.Text);
-			history.Insert (0, comboBox.Entry.Text);
-			PropertyService.Set (propertyName, string.Join (historySeparator.ToString (), history.ToArray ()));
+			PropertyService.Set (propertyKey, history != null ? String.Join (historySeparator.ToString (), history.ToArray ()) : null);
 		}
 
 		protected override void OnDestroyed ()
@@ -769,10 +781,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			case SearchScope.WholeWorkspace:
 				scope = new WholeSolutionScope ();
 				break;
-			case SearchScope.WholeWorkspaceIncludingCodeBehind:
-				scope = new WholeSolutionScope () { IncludeCodeBehind = true } ;
-				break;
-
 			case SearchScope.CurrentProject:
 				var currentSelectedProject = IdeApp.ProjectOperations.CurrentSelectedProject;
 				if (currentSelectedProject != null) {
@@ -803,21 +811,45 @@ namespace MonoDevelop.Ide.FindInFiles
 		{
 			return new FilterOptions {
 				FileMask = searchentryFileMask != null && !string.IsNullOrEmpty (searchentryFileMask.Query) ? searchentryFileMask.Query : "*",
-				CaseSensitive = checkbuttonCaseSensitive.Active,
-				RegexSearch = checkbuttonRegexSearch.Active,
-				WholeWordsOnly = checkbuttonWholeWordsOnly.Active
+				CaseSensitive = caseSensitive,
+				RegexSearch = regexSearch,
+				WholeWordsOnly = wholeWordsOnly,
+				IncludeCodeBehind = includeCodeBehind
 			};
 		}
 
 		static FindReplace find;
 		void HandleReplaceClicked (object sender, EventArgs e)
 		{
-			SearchReplace (comboboxentryFind.Entry.Text, comboboxentryReplace.Entry.Text ?? "", GetScope (), GetFilterOptions (), () => UpdateStopButton (), UpdateResultPad);
+			SearchReplace (searchEntryFind.Entry.Text, searchEntryReplace.Entry.Text ?? "", GetScope (), GetFilterOptions (), () => UpdateStopButton (), UpdateResultPad);
+			UpdateHistory (searchHistoryKey, searchEntryFind.Entry.Text);
+			UpdateHistory (replaceHistoryKey, searchEntryReplace.Entry.Text);
 		}
 
 		void HandleSearchClicked (object sender, EventArgs e)
 		{
-			SearchReplace (comboboxentryFind.Entry.Text, null, GetScope (), GetFilterOptions (), () => UpdateStopButton (), UpdateResultPad);
+			SearchReplace (searchEntryFind.Entry.Text, null, GetScope (), GetFilterOptions (), () => UpdateStopButton (), UpdateResultPad);
+			UpdateHistory (searchHistoryKey, searchEntryFind.Entry.Text);
+		}
+
+		const int historyLimit = 20;
+		static void UpdateHistory (string propertyKey, string item)
+		{
+			var history = GetHistory (propertyKey);
+			history.Remove (item);
+			history.Insert (0, item);
+			while (history.Count >= historyLimit)
+				history.RemoveAt (historyLimit - 1);
+
+			StoreHistory (propertyKey, history);
+		}
+
+		static List<string> GetHistory (string propertyKey)
+		{
+			string stringArray = PropertyService.Get<string> (propertyKey);
+			if (String.IsNullOrEmpty (stringArray))
+				return new List<string> ();
+			return new List<string> (stringArray.Split (historySeparator));
 		}
 
 		static CancellationTokenSource searchTokenSource = new CancellationTokenSource ();

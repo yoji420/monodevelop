@@ -17,23 +17,13 @@ namespace MonoDevelop.Ide.FindInFiles
 		
 		private global::Gtk.Table tableFindAndReplace;
 		
-		private global::Gtk.ComboBoxEntry comboboxentryFind;
-		
 		private global::Gtk.HBox hbox2;
 		
 		private global::Gtk.ComboBox comboboxScope;
 		
-		private global::Gtk.Label labelFind;
-		
 		private global::Gtk.Label labelScope;
 		
 		private global::Gtk.Table table1;
-		
-		private global::Gtk.CheckButton checkbuttonCaseSensitive;
-		
-		private global::Gtk.CheckButton checkbuttonRegexSearch;
-		
-		private global::Gtk.CheckButton checkbuttonWholeWordsOnly;
 		
 		private global::Gtk.Button buttonStop;
 		
@@ -116,14 +106,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			this.tableFindAndReplace.RowSpacing = ((uint)(6));
 			this.tableFindAndReplace.ColumnSpacing = ((uint)(6));
 			// Container child tableFindAndReplace.Gtk.Table+TableChild
-			this.comboboxentryFind = global::Gtk.ComboBoxEntry.NewText ();
-			this.comboboxentryFind.Name = "comboboxentryFind";
-			this.tableFindAndReplace.Add (this.comboboxentryFind);
-			global::Gtk.Table.TableChild w6 = ((global::Gtk.Table.TableChild)(this.tableFindAndReplace [this.comboboxentryFind]));
-			w6.LeftAttach = ((uint)(1));
-			w6.RightAttach = ((uint)(2));
-			w6.YOptions = ((global::Gtk.AttachOptions)(4));
-			// Container child tableFindAndReplace.Gtk.Table+TableChild
 			this.hbox2 = new global::Gtk.HBox ();
 			this.hbox2.Name = "hbox2";
 			this.hbox2.Spacing = 6;
@@ -143,16 +125,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			w8.RightAttach = ((uint)(2));
 			w8.XOptions = ((global::Gtk.AttachOptions)(4));
 			w8.YOptions = ((global::Gtk.AttachOptions)(4));
-			// Container child tableFindAndReplace.Gtk.Table+TableChild
-			this.labelFind = new global::Gtk.Label ();
-			this.labelFind.Name = "labelFind";
-			this.labelFind.Xalign = 0F;
-			this.labelFind.LabelProp = global::Mono.Unix.Catalog.GetString ("_Find:");
-			this.labelFind.UseUnderline = true;
-			this.tableFindAndReplace.Add (this.labelFind);
-			global::Gtk.Table.TableChild w9 = ((global::Gtk.Table.TableChild)(this.tableFindAndReplace [this.labelFind]));
-			w9.XOptions = ((global::Gtk.AttachOptions)(4));
-			w9.YOptions = ((global::Gtk.AttachOptions)(4));
 			// Container child tableFindAndReplace.Gtk.Table+TableChild
 			this.labelScope = new global::Gtk.Label ();
 			this.labelScope.Name = "labelScope";
@@ -178,40 +150,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			this.table1.Name = "table1";
 			this.table1.RowSpacing = ((uint)(6));
 			this.table1.ColumnSpacing = ((uint)(6));
-			// Container child table1.Gtk.Table+TableChild
-			this.checkbuttonCaseSensitive = new global::Gtk.CheckButton ();
-			this.checkbuttonCaseSensitive.CanFocus = true;
-			this.checkbuttonCaseSensitive.Name = "checkbuttonCaseSensitive";
-			this.checkbuttonCaseSensitive.Label = global::Mono.Unix.Catalog.GetString ("C_ase sensitive");
-			this.checkbuttonCaseSensitive.DrawIndicator = true;
-			this.checkbuttonCaseSensitive.UseUnderline = true;
-			this.table1.Add (this.checkbuttonCaseSensitive);
-			global::Gtk.Table.TableChild w13 = ((global::Gtk.Table.TableChild)(this.table1 [this.checkbuttonCaseSensitive]));
-			w13.YOptions = ((global::Gtk.AttachOptions)(4));
-			// Container child table1.Gtk.Table+TableChild
-			this.checkbuttonRegexSearch = new global::Gtk.CheckButton ();
-			this.checkbuttonRegexSearch.CanFocus = true;
-			this.checkbuttonRegexSearch.Name = "checkbuttonRegexSearch";
-			this.checkbuttonRegexSearch.Label = global::Mono.Unix.Catalog.GetString ("Rege_x search");
-			this.checkbuttonRegexSearch.DrawIndicator = true;
-			this.checkbuttonRegexSearch.UseUnderline = true;
-			this.table1.Add (this.checkbuttonRegexSearch);
-			global::Gtk.Table.TableChild w14 = ((global::Gtk.Table.TableChild)(this.table1 [this.checkbuttonRegexSearch]));
-			w14.TopAttach = ((uint)(2));
-			w14.BottomAttach = ((uint)(3));
-			w14.YOptions = ((global::Gtk.AttachOptions)(4));
-			// Container child table1.Gtk.Table+TableChild
-			this.checkbuttonWholeWordsOnly = new global::Gtk.CheckButton ();
-			this.checkbuttonWholeWordsOnly.CanFocus = true;
-			this.checkbuttonWholeWordsOnly.Name = "checkbuttonWholeWordsOnly";
-			this.checkbuttonWholeWordsOnly.Label = global::Mono.Unix.Catalog.GetString ("_Whole words only");
-			this.checkbuttonWholeWordsOnly.DrawIndicator = true;
-			this.checkbuttonWholeWordsOnly.UseUnderline = true;
-			this.table1.Add (this.checkbuttonWholeWordsOnly);
-			global::Gtk.Table.TableChild w15 = ((global::Gtk.Table.TableChild)(this.table1 [this.checkbuttonWholeWordsOnly]));
-			w15.TopAttach = ((uint)(1));
-			w15.BottomAttach = ((uint)(2));
-			w15.YOptions = ((global::Gtk.AttachOptions)(4));
 			this.vbox2.Add (this.table1);
 			global::Gtk.Box.BoxChild w16 = ((global::Gtk.Box.BoxChild)(this.vbox2 [this.table1]));
 			w16.Position = 2;
@@ -270,7 +208,6 @@ namespace MonoDevelop.Ide.FindInFiles
 			}
 			this.DefaultWidth = 456;
 			this.DefaultHeight = 348;
-			this.labelFind.MnemonicWidget = this.comboboxentryFind;
 			this.labelScope.MnemonicWidget = this.comboboxScope;
 			this.Hide ();
 		}

@@ -121,8 +121,6 @@ namespace MonoDevelop.Ide.FindInFiles
 
 	public class WholeSolutionScope : Scope
 	{
-		public bool IncludeCodeBehind { get; internal set; }
-
 		public override int GetTotalWork (FilterOptions filterOptions)
 		{
 			int result = 0;
@@ -170,8 +168,10 @@ namespace MonoDevelop.Ide.FindInFiles
 							  () => new List<FileProvider> (),
 							  (project, loop, providers) => {
 								  var conf = project.DefaultConfiguration?.Selector;
-								  foreach (var file in IncludeCodeBehind ? (IEnumerable<ProjectFile>)project.GetSourceFilesAsync (conf).Result : project.Files) {
+								  foreach (var file in (IEnumerable<ProjectFile>)project.GetSourceFilesAsync (conf).Result) {
 									  if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
+										  continue;
+									  if (!filterOptions.IncludeCodeBehind && IsGeneratedCodeFile (file.Name))
 										  continue;
 									  if (!filterOptions.NameMatches (file.Name))
 										  continue;
@@ -203,6 +203,30 @@ namespace MonoDevelop.Ide.FindInFiles
 				return GettextCatalog.GetString ("Looking for '{0}' in all projects", pattern);
 			return GettextCatalog.GetString ("Replacing '{0}' in all projects", pattern);
 		}
+
+		internal static bool IsGeneratedCodeFile (FilePath filePath)
+		{
+			if (!string.IsNullOrEmpty (filePath)) {
+				var fileName = filePath.FileName;
+				if (fileName.StartsWith ("TemporaryGeneratedFile_", StringComparison.OrdinalIgnoreCase)) {
+					return true;
+				}
+
+				var extension = filePath.Extension;
+				if (!string.IsNullOrEmpty (extension)) {
+					var fileNameWithoutExtension = filePath.FileNameWithoutExtension;
+					if (fileNameWithoutExtension.EndsWith (".designer", StringComparison.OrdinalIgnoreCase) ||
+						fileNameWithoutExtension.EndsWith (".generated", StringComparison.OrdinalIgnoreCase) ||
+						fileNameWithoutExtension.EndsWith (".g", StringComparison.OrdinalIgnoreCase) ||
+						fileNameWithoutExtension.EndsWith (".g.i", StringComparison.OrdinalIgnoreCase)) {
+						return true;
+					}
+				}
+			}
+
+			return false;
+		}
+
 	}
 
 	public class WholeProjectScope : Scope
@@ -228,10 +252,12 @@ namespace MonoDevelop.Ide.FindInFiles
 				monitor.Log.WriteLine (GettextCatalog.GetString ("Looking in project '{0}'", project.Name));
 				var alreadyVisited = new HashSet<string> ();
 				var conf = project.DefaultConfiguration?.Selector;
-				foreach (var file in project.Files) {
+				foreach (ProjectFile file in project.GetSourceFilesAsync (conf).Result) {
 					if ((file.Flags & ProjectItemFlags.Hidden) == ProjectItemFlags.Hidden)
 						continue;
 					if (!filterOptions.NameMatches (file.Name))
+						continue;
+					if (!filterOptions.IncludeCodeBehind && WholeSolutionScope.IsGeneratedCodeFile (file.Name))
 						continue;
 					if (!DesktopService.GetFileIsText (file.Name))
 						continue;
