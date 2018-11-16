@@ -169,21 +169,10 @@ namespace MonoDevelop.Ide.FindInFiles
 
 			toggleReplaceInFiles.Active = showReplace;
 			toggleFindInFiles.Active = !showReplace;
-			
-			toggleFindInFiles.Toggled += delegate {
-				if (toggleFindInFiles.Active) {
-					Title = GettextCatalog.GetString ("Find in Files");
-					HideReplaceUI ();
-				}
-			};
-			
-			toggleReplaceInFiles.Toggled += delegate {
-				if (toggleReplaceInFiles.Active) {
-					Title = GettextCatalog.GetString ("Replace in Files");
-					ShowReplaceUI ();
-				}
-			};
-			
+
+			toggleFindInFiles.Toggled += ToggleFindInFiles_Toggled;
+			toggleReplaceInFiles.Toggled += ToggleReplaceInFiles_Toggled;
+
 			buttonSearch.Clicked += HandleSearchClicked;
 			buttonClose.Clicked += (sender, e) => Destroy ();
 			DeleteEvent += (o, args) => Destroy ();
@@ -246,6 +235,22 @@ namespace MonoDevelop.Ide.FindInFiles
 				UpdateSensitivity ();
 				return true;
 			});
+		}
+
+		void ToggleFindInFiles_Toggled (object sender, EventArgs e)
+		{
+			if (toggleFindInFiles.Active) {
+				Title = GettextCatalog.GetString ("Find in Files");
+				HideReplaceUI ();
+			}
+		}
+
+		void ToggleReplaceInFiles_Toggled (object sender, EventArgs e)
+		{
+			if (toggleReplaceInFiles.Active) {
+				Title = GettextCatalog.GetString ("Replace in Files");
+				ShowReplaceUI ();
+			}
 		}
 
 		void SetupAccessibility ()
@@ -644,42 +649,37 @@ namespace MonoDevelop.Ide.FindInFiles
 		static ConfigurationProperty<bool> regexSearch = ConfigurationProperty.Create ("RegexSearch", false);
 		static ConfigurationProperty<bool> includeCodeBehind = ConfigurationProperty.Create ("FindInFilesDialog.IncludeCodeBehind", false);
 
+		CheckMenuItem caseSensitiveItem, wholeWordsOnlyItem, regexSearchItem, includeCodeBehindItem;
+
 		void InitFromProperties ()
 		{
 			comboboxScope.Active = properties.Get ("Scope", (int) SearchScope.WholeWorkspace);
 
 			searchEntryFind.Menu = new Menu ();
 
-			var caseSensitiveItem = new CheckMenuItem (GettextCatalog.GetString ("_Case sensitive"));
+			caseSensitiveItem = new CheckMenuItem (GettextCatalog.GetString ("_Case sensitive"));
 			caseSensitiveItem.Active = caseSensitive;
 			caseSensitiveItem.DrawAsRadio = false;
-			caseSensitiveItem.Toggled += delegate {
-				caseSensitive.Value = caseSensitiveItem.Active;
-			};
+			caseSensitiveItem.Toggled += CaseSensitiveItem_Toggled;
 			searchEntryFind.Menu.Add (caseSensitiveItem);
 
-			var wholeWordsOnlyItem = new CheckMenuItem (GettextCatalog.GetString ("_Whole words only"));
+			wholeWordsOnlyItem = new CheckMenuItem (GettextCatalog.GetString ("_Whole words only"));
 			wholeWordsOnlyItem.Active = wholeWordsOnly;
 			wholeWordsOnlyItem.DrawAsRadio = false;
-			wholeWordsOnlyItem.Toggled += delegate {
-				wholeWordsOnly.Value = wholeWordsOnlyItem.Active;
-			};
+			wholeWordsOnlyItem.Toggled += WholeWordsOnlyItem_Toggled;
 			searchEntryFind.Menu.Add (wholeWordsOnlyItem);
 
-			var regexSearchItem = new CheckMenuItem (GettextCatalog.GetString ("_Regex search"));
+			regexSearchItem = new CheckMenuItem (GettextCatalog.GetString ("_Regex search"));
 			regexSearchItem.Active = regexSearch;
 			regexSearchItem.DrawAsRadio = false;
-			regexSearchItem.Toggled += delegate {
-				regexSearch.Value = regexSearchItem.Active;
-			};
+			regexSearchItem.Toggled += RegexSearchItem_Toggled;
 			searchEntryFind.Menu.Add (regexSearchItem);
 
-			var includeCodeBehindItem = new CheckMenuItem (GettextCatalog.GetString ("_Include code behind files"));
+			includeCodeBehindItem = new CheckMenuItem (GettextCatalog.GetString ("_Include code behind files"));
 			includeCodeBehindItem.Active = regexSearch;
 			includeCodeBehindItem.DrawAsRadio = false;
-			includeCodeBehindItem.Toggled += delegate {
-				includeCodeBehind.Value = includeCodeBehindItem.Active;
-			};
+			includeCodeBehindItem.Toggled += IncludeCodeBehindItem_Toggled;
+
 			searchEntryFind.Menu.Add (includeCodeBehindItem);
 
 			var history = GetHistory (searchHistoryKey);
@@ -689,7 +689,44 @@ namespace MonoDevelop.Ide.FindInFiles
 			}
 		}
 
-		private void AddHistoryMenuItems (MonoDevelop.Components.SearchEntry searchEntry, string text, List<string> history)
+		void CaseSensitiveItem_Toggled (object sender, EventArgs e)
+		{
+			caseSensitive.Value = caseSensitiveItem.Active;
+		}
+
+		void WholeWordsOnlyItem_Toggled (object sender, EventArgs e)
+		{
+			wholeWordsOnly.Value = wholeWordsOnlyItem.Active;
+		}
+
+		void RegexSearchItem_Toggled (object sender, EventArgs e)
+		{
+			regexSearch.Value = regexSearchItem.Active;
+		}
+
+		void IncludeCodeBehindItem_Toggled (object sender, EventArgs e)
+		{
+			includeCodeBehind.Value = includeCodeBehindItem.Active;
+		}
+
+		class RecentHistoryMenuItem : MenuItem
+		{
+			readonly SearchEntry searchEntry;
+
+			public RecentHistoryMenuItem (SearchEntry searchEntry, string label) : base (label)
+			{
+				this.searchEntry = searchEntry;
+				this.Name = label;
+			}
+
+			protected override void OnActivated ()
+			{
+				base.OnActivated ();
+				searchEntry.Entry.Text = Name;
+			}
+		}
+
+		private void AddHistoryMenuItems (SearchEntry searchEntry, string text, List<string> history)
 		{
 			var recentSearches = new MenuItem (text);
 			recentSearches.Sensitive = false;
@@ -698,13 +735,7 @@ namespace MonoDevelop.Ide.FindInFiles
 			foreach (string item in history) {
 				if (item == searchEntry.Entry.Text)
 					continue;
-				var recentItem = new MenuItem (item);
-				recentItem.Name = item;
-				recentItem.Activated += delegate (object mySender, EventArgs myE) {
-					var cur = (MenuItem)mySender;
-					searchEntry.Entry.Text = cur.Name;
-				};
-				searchEntry.Menu.Add (recentItem);
+				searchEntry.Menu.Add (new RecentHistoryMenuItem (searchEntry, item));
 			}
 		}
 
@@ -724,6 +755,14 @@ namespace MonoDevelop.Ide.FindInFiles
 
 		protected override void OnDestroyed ()
 		{
+			toggleFindInFiles.Toggled -= ToggleFindInFiles_Toggled;
+			toggleReplaceInFiles.Toggled -= ToggleReplaceInFiles_Toggled;
+
+			caseSensitiveItem.Toggled -= CaseSensitiveItem_Toggled;
+			wholeWordsOnlyItem.Toggled -= WholeWordsOnlyItem_Toggled;
+			regexSearchItem.Toggled -= RegexSearchItem_Toggled;
+			includeCodeBehindItem.Toggled -= IncludeCodeBehindItem_Toggled;
+
 			if (resultPad != null) {
 				var resultWidget = resultPad.Control.GetNativeWidget<SearchResultWidget> ();
 				if (resultWidget.ResultCount > 0) {
