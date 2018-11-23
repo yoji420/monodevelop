@@ -37,6 +37,8 @@ using MonoDevelop.Core;
 using System.Linq;
 using MonoDevelop.Ide.Gui.Dialogs;
 using MonoDevelop.Ide.Editor;
+using MonoDevelop.Components.DockNotebook;
+using System.Collections.Generic;
 
 namespace MonoDevelop.Ide.Commands
 {
@@ -51,9 +53,9 @@ namespace MonoDevelop.Ide.Commands
 		PinTab,
 	}
 	
-	class CloseAllHandler : CommandHandler
+	class CloseAllHandler : TabCommandHandler
 	{
-		protected virtual ViewContent GetDocumentException ()
+		protected virtual List<ViewContent> GetDocumentExceptions ()
 		{
 			return null;
 		}
@@ -65,10 +67,10 @@ namespace MonoDevelop.Ide.Commands
 				return;
 
 			var activeNotebook = ((SdiWorkspaceWindow)active.Window).TabControl;
-			var except = GetDocumentException ();
+			var excluded = GetDocumentExceptions ();
 
 			var docs = IdeApp.Workbench.Documents
-				.Where (doc => ((SdiWorkspaceWindow)doc.Window).TabControl == activeNotebook && (except == null || doc.Window.ViewContent != except))
+				.Where (doc => ((SdiWorkspaceWindow)doc.Window).TabControl == activeNotebook && (excluded == null || !excluded.Any (except => doc.Window.ViewContent == except)))
 				.ToArray ();
 
 			var dirtyDialogShown = docs.Count (doc => doc.IsDirty) > 1;
@@ -87,48 +89,46 @@ namespace MonoDevelop.Ide.Commands
 		}
 	}
 
-	class PinnedCommandHandler : CommandHandler
+ 	abstract class TabCommandHandler : CommandHandler
 	{
-		protected Components.DockNotebook.DockNotebookTab GetSelectedTab () 
+		protected DockNotebookTab GetTabFromDocument (Document document)
+		{
+			var activeWindow = (SdiWorkspaceWindow)document.Window;
+			var tabControl = activeWindow.TabControl;
+			return tabControl.Tabs.FirstOrDefault (item => (item.Content as SdiWorkspaceWindow).Equals (activeWindow));
+		}
+
+		protected DockNotebookTab GetTabFromActiveDocument () 
 		{
 			var active = IdeApp.Workbench.ActiveDocument;
 			if (active == null)
 				return null;
-				var activeWindow = (SdiWorkspaceWindow)active.Window;
-			var tabControl = activeWindow.TabControl;
-			return tabControl.Tabs.FirstOrDefault (item => (item.Content as SdiWorkspaceWindow).Equals (activeWindow));
+			return GetTabFromDocument (active);
 		}
 	}
 
-	class CloseAllExceptPinnedHandler : PinnedCommandHandler
+	class CloseAllExceptPinnedHandler : CloseAllHandler
 	{
 		protected override void Update (CommandInfo info)
 		{
 			info.Visible = info.Enabled = DefaultSourceEditorOptions.Instance.EnablePinTabs && IdeApp.Workbench.Documents.Count != 0;
 		}
 
-		protected override void Run ()
+		protected override List<ViewContent> GetDocumentExceptions ()
 		{
 			var active = IdeApp.Workbench.ActiveDocument;
 			if (active == null)
-				return;
+				return null;
+			var activeNotebook = ((SdiWorkspaceWindow)active.Window).TabControl;
 
-			var deleteCache = new System.Collections.Generic.List<Document> ();
-			var w1 = (SdiWorkspaceWindow)active.Window;
-			foreach (var item in w1.TabControl.Tabs.Where(s => !s.IsPinned)) {
-				var workspaceWindow = item.Content as SdiWorkspaceWindow; 
-				if (workspaceWindow != null && workspaceWindow.Document != null)
-					deleteCache.Add (workspaceWindow.Document);
-			}
+			var contents = IdeApp.Workbench.Documents.Where (doc => ((SdiWorkspaceWindow)doc.Window).TabControl == activeNotebook && GetTabFromDocument (doc).IsPinned)
+				.Select (s => s.Window.ViewContent);
 
-			foreach (Document doc in IdeApp.Workbench.Documents.ToArray ()) {
-				if (deleteCache.Contains(doc))
-					doc.Close();
-			}
+			return contents.ToList ();
 		}
 	}
 
-	class PinTabHandler : PinnedCommandHandler
+	class PinTabHandler : TabCommandHandler
 	{
 		protected override void Update (CommandInfo info)
 		{
@@ -136,7 +136,7 @@ namespace MonoDevelop.Ide.Commands
 			if (!info.Visible)
 				return;
 			
-			var selectedTab = GetSelectedTab ();
+			var selectedTab = GetTabFromActiveDocument ();
 			if (selectedTab != null) {
 				info.Text = (selectedTab.IsPinned) ? GettextCatalog.GetString ("Un_pin Tab") : GettextCatalog.GetString ("_Pin Tab");
 			}
@@ -144,7 +144,7 @@ namespace MonoDevelop.Ide.Commands
 
 		protected override void Run ()
 		{
-			var selectedTab = GetSelectedTab (); 
+			var selectedTab = GetTabFromActiveDocument (); 
 			if (selectedTab != null)
 				selectedTab.IsPinned = !selectedTab.IsPinned;
 		}
@@ -152,10 +152,13 @@ namespace MonoDevelop.Ide.Commands
 
 	class CloseAllButThisHandler : CloseAllHandler
 	{
-		protected override ViewContent GetDocumentException ()
+		protected override List<ViewContent> GetDocumentExceptions ()
 		{
 			var active = IdeApp.Workbench.ActiveDocument;
-			return active == null ? null : active.Window.ViewContent;
+			if (active == null) {
+				return null;
+			}
+			return new List<ViewContent> () { active.Window.ViewContent };
 		}
 	}
 	
