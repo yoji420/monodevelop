@@ -122,6 +122,8 @@ namespace MonoDevelop.Components.DockNotebook
 		public bool IsPinned { 
 			get { return isPinned; }
 			set {
+				if (isPinned == value)
+				   return;
 				if (OnChangingPinned != null)
 					OnChangingPinned (this, value);
 				isPinned = value;
