@@ -4498,14 +4498,19 @@ namespace MonoDevelop.Projects
 
 		void OnFileCreatedExternally (FilePath fileName)
 		{
+			LoggingService.LogInfo ("Project: OnFileCreatedExternally: {0}", fileName);
+
 			// Check file is inside the project directory. The file globs would exclude the file anyway
 			// if the relative path starts with "..\" but checking here avoids checking the file globs.
-			if (!fileName.IsChildPathOf (BaseDirectory))
+			if (!fileName.IsChildPathOf (BaseDirectory)) {
+				LoggingService.LogInfo ("Project: OnFileCreatedExternally: Ignoring not in project directory {0}", fileName);
 				return;
+			}
 
 			if (Files.Any (file => file.FilePath == fileName)) {
 				// File exists in project. This can happen if the file was added
 				// in the IDE and not externally.
+				LoggingService.LogInfo ("Project: OnFileCreatedExternally: Ignoring - file already exists in Files collection {0}", fileName);
 				return;
 			}
 
@@ -4525,12 +4530,16 @@ namespace MonoDevelop.Projects
 				var pi = CreateProjectItem (eit);
 				pi.Read (this, eit);
 				if (Runtime.IsMainThread) {
+					LoggingService.LogInfo ("Project: OnFileCreatedExternally: File added to Items {0}", fileName);
 					Items.Add (pi);
 				} else {
 					Runtime.RunInMainThread (() => {
 						// Double check the file has not been added on the UI thread by the IDE.
 						if (!Files.Any (file => file.FilePath == fileName)) {
+							LoggingService.LogInfo ("Project: OnFileCreatedExternally: File added to Items {0}", fileName);
 							Items.Add (pi);
+						} else {
+							LoggingService.LogInfo ("Project: OnFileCreatedExternally: Ignoring - file already exists in Items collection {0}", fileName);
 						}
 					}).Ignore ();
 				}
@@ -4539,11 +4548,13 @@ namespace MonoDevelop.Projects
 
 		void OnFileDeletedExternally (string fileName)
 		{
+			LoggingService.LogInfo ("Project: OnFileDeletedExternally: {0}", fileName);
 			if (File.Exists (fileName)) {
 				// File has not been deleted. The delete event could have been due to
 				// the file being saved. Saving with TextFileUtility will result in
 				// FileService.SystemRename being called to move a temporary file
 				// to the file being saved which deletes and then creates the file.
+				LoggingService.LogInfo ("Project: OnFileDeletedExternally: File exists - ignoring {0}", fileName);
 				return;
 			}
 

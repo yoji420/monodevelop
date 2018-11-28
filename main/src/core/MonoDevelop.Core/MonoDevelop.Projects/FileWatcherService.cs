@@ -248,6 +248,7 @@ namespace MonoDevelop.Projects
 
 		void OnFileCreated (object sender, FileSystemEventArgs e)
 		{
+			LoggingService.LogInfo ("FileSystemWatcher: OnFileCreated: {0}", e.FullPath);
 			FileService.NotifyFileCreated (e.FullPath);
 
 			// The native file watcher sometimes generates a single Created event for a file when it is renamed
@@ -258,11 +259,15 @@ namespace MonoDevelop.Projects
 
 		void OnFileDeleted (object sender, FileSystemEventArgs e)
 		{
+			LoggingService.LogInfo ("FileSystemWatcher: OnFileDeleted: {0}", e.FullPath);
+
 			// The native file watcher sometimes generates a Changed, Created and Deleted event in
 			// that order from a single native file event. So check the file has been deleted before raising
 			// a FileRemoved event.
 			if (!File.Exists (e.FullPath))
 				FileService.NotifyFileRemoved (e.FullPath);
+			else
+				LoggingService.LogInfo ("FileSystemWatcher: OnFileDeleted: FileExists not generating FileService event: {0}", e.FullPath);
 		}
 
 		/// <summary>
@@ -274,6 +279,8 @@ namespace MonoDevelop.Projects
 		/// </summary>
 		void OnFileRenamed (object sender, RenamedEventArgs e)
 		{
+			LoggingService.LogInfo ("FileSystemWatcher: OnFileRenamed: {0}-{1}", e.OldFullPath, e.FullPath);
+
 			FileService.NotifyFileRenamedExternally (e.OldFullPath, e.FullPath);
 			// Some applications, such as TextEdit.app, will create a backup file
 			// and then rename that to the original file. This results in no file
