@@ -136,7 +136,14 @@ namespace MonoDevelop.Projects
 					}
 				}
 
-			}
+				var builder = new System.Text.StringBuilder ();
+				builder.AppendLine ("FileWatcherService paths:");
+				foreach (var p in watchers.Keys) {
+					builder.Append ("   ");
+					builder.AppendLine (p);
+				}
+				LoggingService.LogInfo (builder.ToString ());
+;			}
 		}
 
 		static void RemoveWatcher_NoLock (FilePath directory)
@@ -227,6 +234,8 @@ namespace MonoDevelop.Projects
 			watcher.Deleted += OnFileDeleted;
 			watcher.Renamed += OnFileRenamed;
 			watcher.Error += OnFileWatcherError;
+
+			LoggingService.LogInfo ("FileWatcher created {0}", Path);
 		}
 
 		public FilePath Path { get; }
@@ -239,6 +248,8 @@ namespace MonoDevelop.Projects
 		public void Dispose ()
 		{
 			watcher.Dispose ();
+
+			LoggingService.LogInfo ("FileWatcher disposed {0}", Path);
 		}
 
 		void OnFileChanged (object sender, FileSystemEventArgs e)

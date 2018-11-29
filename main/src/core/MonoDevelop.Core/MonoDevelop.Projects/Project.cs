@@ -4368,6 +4368,7 @@ namespace MonoDevelop.Projects
 			// Use FileService.AsyncEvents for file renamed events since generating the FileService.FileRenamed event
 			// would result in non SDK style projects renaming files in the project if changed externally.
 			FileService.AsyncEvents.FileRenamed += OnFileRenamed;
+			LoggingService.LogInfo ("Project.CreateFileWatcher {0}", FileName);
 		}
 
 		void DisposeFileWatcher ()
@@ -4375,6 +4376,7 @@ namespace MonoDevelop.Projects
 			FileService.AsyncEvents.FileCreated -= OnFileCreated;
 			FileService.AsyncEvents.FileRemoved -= OnFileDeleted;
 			FileService.AsyncEvents.FileRenamed -= OnFileRenamed;
+			LoggingService.LogInfo ("Project.DisposeFileWatcher {0}", FileName);
 		}
 
 		void OnFileRenamed (object sender, FileCopyEventArgs e)
