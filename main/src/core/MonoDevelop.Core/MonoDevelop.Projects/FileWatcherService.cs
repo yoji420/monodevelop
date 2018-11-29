@@ -1,4 +1,4 @@
-﻿//
+//
 // FileWatcherService.cs
 //
 // Author:
@@ -49,6 +49,7 @@ namespace MonoDevelop.Projects
 		public static Task Add (WorkspaceItem item)
 		{
 			lock (watchers) {
+				LoggingService.LogInfo ("FileWatcherService.Add WorkspaceItem: {0}", item.FileName);
 				item.RootDirectoriesChanged += OnRootDirectoriesChanged;
 				return WatchDirectories (item, item.GetRootDirectories ());
 			}
@@ -57,6 +58,7 @@ namespace MonoDevelop.Projects
 		public static Task Remove (WorkspaceItem item)
 		{
 			lock (watchers) {
+				LoggingService.LogInfo ("FileWatcherService.Remove WorkspaceItem: {0}", item.FileName);
 				item.RootDirectoriesChanged -= OnRootDirectoriesChanged;
 				return WatchDirectories (item, null);
 			}
@@ -66,6 +68,7 @@ namespace MonoDevelop.Projects
 		{
 			lock (watchers) {
 				var item = (WorkspaceItem)sender;
+				LoggingService.LogInfo ("FileWatcherService.OnRootDirectoriesChanged WorkspaceItem: {0}", item.FileName);
 				WatchDirectories (item, item.GetRootDirectories ()).Ignore ();
 			}
 		}
@@ -157,9 +160,28 @@ namespace MonoDevelop.Projects
 			}
 		}
 
+
 		public static Task WatchDirectories (object id, IEnumerable<FilePath> directories)
 		{
 			lock (watchers) {
+				WorkspaceItem item = id as WorkspaceItem;
+
+				var builder = new System.Text.StringBuilder ();
+				if (directories == null) {
+					builder.AppendLine ("No Directories");
+				} else {
+					builder.AppendLine ("Directories:");
+					foreach (var d in directories.Where (x => !x.IsNullOrEmpty)) {
+						builder.Append ("    ");
+						builder.AppendLine (d);
+					}
+				}
+				if (item != null) {
+					LoggingService.LogInfo ("FileWatcherService.WatchDirectories WorkspaceItem: {0} {1}", item.FileName, builder);
+				} else {
+					LoggingService.LogInfo ("FileWatcherService.WatchDirectories {0} {1}", id, builder);
+				}
+
 				if (RegisterDirectoriesInTree_NoLock (id, directories))
 					return UpdateWatchersAsync ();
 				return Task.CompletedTask;
