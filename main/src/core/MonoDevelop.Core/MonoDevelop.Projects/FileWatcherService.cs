@@ -140,6 +140,12 @@ namespace MonoDevelop.Projects
 				}
 
 				var builder = new System.Text.StringBuilder ();
+				builder.AppendLine ("newPathsToWatch:");
+				foreach (var p in newPathsToWatch) {
+					builder.Append ("   ");
+					builder.AppendLine (p);
+				}
+
 				builder.AppendLine ("FileWatcherService paths:");
 				foreach (var p in watchers.Keys) {
 					builder.Append ("   ");

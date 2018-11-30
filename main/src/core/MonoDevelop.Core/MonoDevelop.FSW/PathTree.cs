@@ -1,4 +1,4 @@
-﻿//
+//
 // PathTree.cs
 //
 // Author:
@@ -152,6 +152,7 @@ namespace MonoDevelop.FSW
 		{
 			if (TryFind(path, out var result, out var parent, out var previousNode, out var lastIndex))
 			{
+				LoggingService.LogInfo ("PathTree.AddNode - node exists {0}", path);
 				result.RegisterId(id);
 				return result;
 			}
@@ -162,6 +163,8 @@ namespace MonoDevelop.FSW
 				leaf.RegisterId(id);
 
 			InsertNode(first, parent, previousNode);
+
+			LoggingService.LogInfo ("PathTree.AddNode {0}\nPathTree:\n{1}", path, DumpTree ());
 
 			return leaf;
 		}
@@ -196,6 +199,8 @@ namespace MonoDevelop.FSW
 					parent = nodeToRemove.Parent;
 				}
 			}
+
+			LoggingService.LogInfo ("PathTree.RemoveNode {0}\nPathTree:\n{1}", path, DumpTree ());
 
 			return result;
 		}
@@ -247,6 +252,31 @@ namespace MonoDevelop.FSW
 			node.Next = next;
 			if (next != null)
 				next.Previous = node;
+		}
+
+		string DumpTree ()
+		{
+			var builder = new System.Text.StringBuilder ();
+			var node = rootNode;
+			DumpTree (builder, node, 1);
+			return builder.ToString ();
+		}
+
+		void DumpTree (System.Text.StringBuilder builder, PathTreeNode node, int indent)
+		{
+			if (node != rootNode) {
+				builder.Append (node.FullPath.Substring (0, node.Start + node.Length));
+				builder.Append ("/");
+				builder.Append (" IsLive=");
+				builder.Append (node.IsLive);
+				builder.AppendLine ();
+			}
+
+			node = node.FirstChild;
+			while (node != null) {
+				DumpTree (builder, node, indent + 1);
+				node = node.Next;
+			}
 		}
 	}
 }
