@@ -46,10 +46,24 @@ namespace MonoDevelop.Projects
 		static readonly Dictionary<object, HashSet<FilePath>> monitoredDirectories = new Dictionary<object, HashSet<FilePath>> ();
 		static CancellationTokenSource cancellationTokenSource = new CancellationTokenSource ();
 
+		public static bool LoggingEnabled = false;
+
+		public static void Log (string fmt, string arg)
+		{
+			if (LoggingEnabled)
+				LoggingService.LogInfo (fmt, arg);
+		}
+
+		public static void Log (string fmt, string arg, string arg2)
+		{
+			if (LoggingEnabled)
+				LoggingService.LogInfo (fmt, arg, arg2);
+		}
+
 		public static Task Add (WorkspaceItem item)
 		{
 			lock (watchers) {
-				LoggingService.LogInfo ("FileWatcherService.Add WorkspaceItem: {0}", item.FileName);
+				Log ("FileWatcherService.Add WorkspaceItem: {0}", item.FileName);
 				item.RootDirectoriesChanged += OnRootDirectoriesChanged;
 				return WatchDirectories (item, item.GetRootDirectories ());
 			}
@@ -58,7 +72,7 @@ namespace MonoDevelop.Projects
 		public static Task Remove (WorkspaceItem item)
 		{
 			lock (watchers) {
-				LoggingService.LogInfo ("FileWatcherService.Remove WorkspaceItem: {0}", item.FileName);
+				Log ("FileWatcherService.Remove WorkspaceItem: {0}", item.FileName);
 				item.RootDirectoriesChanged -= OnRootDirectoriesChanged;
 				return WatchDirectories (item, null);
 			}
@@ -68,7 +82,7 @@ namespace MonoDevelop.Projects
 		{
 			lock (watchers) {
 				var item = (WorkspaceItem)sender;
-				LoggingService.LogInfo ("FileWatcherService.OnRootDirectoriesChanged WorkspaceItem: {0}", item.FileName);
+				Log ("FileWatcherService.OnRootDirectoriesChanged WorkspaceItem: {0}", item.FileName);
 				WatchDirectories (item, item.GetRootDirectories ()).Ignore ();
 			}
 		}
@@ -151,7 +165,7 @@ namespace MonoDevelop.Projects
 					builder.Append ("   ");
 					builder.AppendLine (p);
 				}
-				LoggingService.LogInfo (builder.ToString ());
+				FileWatcherService.Log ("{0}", builder.ToString ());
 ;			}
 		}
 
@@ -183,9 +197,9 @@ namespace MonoDevelop.Projects
 					}
 				}
 				if (item != null) {
-					LoggingService.LogInfo ("FileWatcherService.WatchDirectories WorkspaceItem: {0} {1}", item.FileName, builder);
+					Log ("FileWatcherService.WatchDirectories WorkspaceItem: {0} {1}", item.FileName, builder.ToString ());
 				} else {
-					LoggingService.LogInfo ("FileWatcherService.WatchDirectories {0} {1}", id, builder);
+					Log ("FileWatcherService.WatchDirectories {0} {1}", id.ToString (), builder.ToString ());
 				}
 
 				if (RegisterDirectoriesInTree_NoLock (id, directories))
@@ -263,7 +277,7 @@ namespace MonoDevelop.Projects
 			watcher.Renamed += OnFileRenamed;
 			watcher.Error += OnFileWatcherError;
 
-			LoggingService.LogInfo ("FileWatcher created {0}", Path);
+			FileWatcherService.Log ("FileWatcher created {0}", Path);
 		}
 
 		public FilePath Path { get; }
@@ -277,7 +291,7 @@ namespace MonoDevelop.Projects
 		{
 			watcher.Dispose ();
 
-			LoggingService.LogInfo ("FileWatcher disposed {0}", Path);
+			FileWatcherService.Log ("FileWatcher disposed {0}", Path);
 		}
 
 		void OnFileChanged (object sender, FileSystemEventArgs e)
@@ -287,7 +301,7 @@ namespace MonoDevelop.Projects
 
 		void OnFileCreated (object sender, FileSystemEventArgs e)
 		{
-			LoggingService.LogInfo ("FileSystemWatcher: OnFileCreated: {0}", e.FullPath);
+			FileWatcherService.Log ("FileSystemWatcher: OnFileCreated: {0}", e.FullPath);
 			FileService.NotifyFileCreated (e.FullPath);
 
 			// The native file watcher sometimes generates a single Created event for a file when it is renamed
@@ -298,7 +312,7 @@ namespace MonoDevelop.Projects
 
 		void OnFileDeleted (object sender, FileSystemEventArgs e)
 		{
-			LoggingService.LogInfo ("FileSystemWatcher: OnFileDeleted: {0}", e.FullPath);
+			FileWatcherService.Log ("FileSystemWatcher: OnFileDeleted: {0}", e.FullPath);
 
 			// The native file watcher sometimes generates a Changed, Created and Deleted event in
 			// that order from a single native file event. So check the file has been deleted before raising
@@ -306,7 +320,7 @@ namespace MonoDevelop.Projects
 			if (!File.Exists (e.FullPath))
 				FileService.NotifyFileRemoved (e.FullPath);
 			else
-				LoggingService.LogInfo ("FileSystemWatcher: OnFileDeleted: FileExists not generating FileService event: {0}", e.FullPath);
+				FileWatcherService.Log ("FileSystemWatcher: OnFileDeleted: FileExists not generating FileService event: {0}", e.FullPath);
 		}
 
 		/// <summary>
@@ -318,7 +332,7 @@ namespace MonoDevelop.Projects
 		/// </summary>
 		void OnFileRenamed (object sender, RenamedEventArgs e)
 		{
-			LoggingService.LogInfo ("FileSystemWatcher: OnFileRenamed: {0}-{1}", e.OldFullPath, e.FullPath);
+			FileWatcherService.Log ("FileSystemWatcher: OnFileRenamed: {0}-{1}", e.OldFullPath, e.FullPath);
 
 			FileService.NotifyFileRenamedExternally (e.OldFullPath, e.FullPath);
 			// Some applications, such as TextEdit.app, will create a backup file

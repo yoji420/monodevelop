@@ -152,7 +152,7 @@ namespace MonoDevelop.FSW
 		{
 			if (TryFind(path, out var result, out var parent, out var previousNode, out var lastIndex))
 			{
-				LoggingService.LogInfo ("PathTree.AddNode - node exists {0}", path);
+				Projects.FileWatcherService.Log ("PathTree.AddNode - node exists {0}", path);
 				result.RegisterId(id);
 				return result;
 			}
@@ -164,7 +164,7 @@ namespace MonoDevelop.FSW
 
 			InsertNode(first, parent, previousNode);
 
-			LoggingService.LogInfo ("PathTree.AddNode {0}\nPathTree:\n{1}", path, DumpTree ());
+			Projects.FileWatcherService.Log ("PathTree.AddNode {0}\nPathTree:\n{1}", path, DumpTree ());
 
 			return leaf;
 		}
@@ -200,7 +200,7 @@ namespace MonoDevelop.FSW
 				}
 			}
 
-			LoggingService.LogInfo ("PathTree.RemoveNode {0}\nPathTree:\n{1}", path, DumpTree ());
+			Projects.FileWatcherService.Log ("PathTree.RemoveNode {0}\nPathTree:\n{1}", path, DumpTree ());
 
 			return result;
 		}
