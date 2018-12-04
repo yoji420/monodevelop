@@ -126,7 +126,7 @@ namespace MonoDevelop.Ide.TypeSystem
 		{
 			var tcs = new TaskCompletionSource<MetadataReferenceUpdatedEventArgs> ();
 			var cts = new CancellationTokenSource ();
-			cts.Token.Register (() => tcs.TrySetResult (null));
+			cts.Token.Register (() => tcs.TrySetCanceled ());
 			item.SnapshotUpdated += (sender, args) => {
 				// This routes through file service
 				tcs.TrySetResult (args);
