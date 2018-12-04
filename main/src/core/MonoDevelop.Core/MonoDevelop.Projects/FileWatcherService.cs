@@ -51,13 +51,13 @@ namespace MonoDevelop.Projects
 		public static void Log (string fmt, string arg)
 		{
 			if (LoggingEnabled)
-				LoggingService.LogInfo (fmt, arg);
+				LoggingService.LogError (fmt, arg);
 		}
 
 		public static void Log (string fmt, string arg, string arg2)
 		{
 			if (LoggingEnabled)
-				LoggingService.LogInfo (fmt, arg, arg2);
+				LoggingService.LogError (fmt, arg, arg2);
 		}
 
 		public static Task Add (WorkspaceItem item)
