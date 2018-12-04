@@ -55,6 +55,7 @@ namespace MonoDevelop.Ide.TypeSystem
 		[Test]
 		public async Task ReferenceCacheSnapshotUpdates ()
 		{
+			FileWatcherService.LoggingEnabled = true;
 			string solFile = Util.GetSampleProject ("console-project", "ConsoleProject.sln");
 
 			var tempPath = Path.GetFullPath (Path.GetTempFileName ());
@@ -117,6 +118,7 @@ namespace MonoDevelop.Ide.TypeSystem
 				Assert.AreEqual (true, await tcsShouldTimeout.Task);
 			} finally {
 				File.Delete (tempPath);
+				FileWatcherService.LoggingEnabled = false;
 			}
 		}
 
