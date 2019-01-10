@@ -114,7 +114,7 @@ namespace MonoDevelop.Components
 				popover.Destroy ();
 			popover = TooltipPopoverWindow.Create ();
 			popover.ShowArrow = true;
-			popover.Text = message;
+			popover.Markup = message;
 			popover.Severity = severity;
 			popover.ShowPopup (this, popupPosition);
 		}
