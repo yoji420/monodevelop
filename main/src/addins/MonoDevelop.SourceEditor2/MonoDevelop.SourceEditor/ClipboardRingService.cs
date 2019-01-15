@@ -103,16 +103,8 @@ namespace MonoDevelop.SourceEditor
 			return clipboardRing;
 		}
 
-		internal static bool DeleteItem (ItemToolboxNode node)
-		{
-			var item = clipboardRing.FirstOrDefault (s => s == node);
-			if (item != null) {
-				clipboardRing.Remove (item);
-				return true;
-			}
-			return false;
-		}
-
+		internal static bool DeleteItem (ItemToolboxNode node) => clipboardRing.Remove (node as ClipboardToolboxNode);
+		
 		class ClipboardToolboxNode : ItemToolboxNode, ITextToolboxNode, ICustomTooltipToolboxNode
 		{
 			static readonly ToolboxItemFilterAttribute filterAtt = new ToolboxItemFilterAttribute ("text/plain", ToolboxItemFilterType.Allow);
