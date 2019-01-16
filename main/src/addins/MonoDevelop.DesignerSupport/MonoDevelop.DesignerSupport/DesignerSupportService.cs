@@ -142,11 +142,9 @@ namespace MonoDevelop.DesignerSupport
 				if (provs.Length > 0) {
 					propertyPad.SetCurrentObject (comp, provs);
 
-#if !MAC
 					if (propertyPad is PropertyPad propPad) {
 						propPad.CommandRouteOrigin = commandRouteOrigin;
 					}
-#endif
 				}
 				else
 					propertyPad.BlankPad ();
@@ -179,19 +177,19 @@ namespace MonoDevelop.DesignerSupport
 
 				lastCustomProvider = provider;
 
-#if !MAC
 				if (propertyPad != null) {
 					if (propertyPad is PropertyPad ppad) {
 						ppad.UseCustomWidget (provider.GetCustomPropertyWidget ());
 						ppad.CommandRouteOrigin = commandRouteOrigin;
+#if !MAC
 						if (provider is IPropertyPadCustomizer customizer) {
 							customizer.Customize (ppad.PadWindow, null);
 						}
+#endif
 					}
 				}
-#endif
-			}
-			else {
+
+			} else {
 				ReSetPad ();
 			}
 		}
