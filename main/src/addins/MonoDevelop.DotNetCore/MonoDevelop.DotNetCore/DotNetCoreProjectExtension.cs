@@ -409,7 +409,12 @@ namespace MonoDevelop.DotNetCore
 			if (ProjectNeedsRestore ()) {
 				return CreateNuGetRestoreRequiredBuildResult ();
 			}
-			if ((HasSdk && !IsDotNetCoreSdkInstalled ()) || sdkPaths.IsUnsupportedSdkVersion) {
+
+			if (!Project.TargetFramework.Id.IsNetStandardOrNetCoreApp ()) {
+				return null;
+			}
+
+			if ((HasSdk && !IsDotNetCoreSdkInstalled ()) || (sdkPaths != null && sdkPaths.IsUnsupportedSdkVersion)) {
 				return CreateDotNetCoreSdkRequiredBuildResult ();
 			}
 			return null;
@@ -472,9 +477,7 @@ namespace MonoDevelop.DotNetCore
 			base.OnBeginLoad ();
 		}
 
-		public bool HasSdk {
-			get { return dotNetCoreMSBuildProject.HasSdk; }
-		}
+		public bool HasSdk => Project.MSBuildProject.GetReferencedSDKs ().Length > 0;
 
 		protected bool IsWebProject (DotNetProject project)
 		{
@@ -491,8 +494,12 @@ namespace MonoDevelop.DotNetCore
 
 			if (!HasSdk)
 				return;
-		
-			sdkPaths = DotNetCoreSdk.FindSdkPaths (dotNetCoreMSBuildProject.Sdk);
+
+			var sdks = string.Join (";", Project.MSBuildProject.GetReferencedSDKs ());
+			sdkPaths = DotNetCoreSdk.FindSdkPaths (sdks);
+			if (string.IsNullOrEmpty (dotNetCoreMSBuildProject.Sdk)) {
+				dotNetCoreMSBuildProject.Sdk = sdks;
+			}
 		}
 
 		protected override async Task<ImmutableArray<ProjectFile>> OnGetSourceFiles (ProgressMonitor monitor, ConfigurationSelector configuration)
